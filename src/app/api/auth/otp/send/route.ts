@@ -21,7 +21,7 @@ export async function POST(request: Request) {
     const senderEmail = process.env.BREVO_SENDER_EMAIL ?? 'noreply@auth.tkoi.online';
     const senderName = process.env.BREVO_SENDER_NAME ?? 'PULSO';
     if (!apiKey) throw new Error('brevo_not_configured');
-    const delivery = await fetch('https://api.brevo.com/v3/smtp/email', { method: 'POST', headers: { accept: 'application/json', 'api-key': apiKey, 'content-type': 'application/json' }, body: JSON.stringify({ sender: { email: senderEmail, name: senderName }, to: [{ email }], subject: 'O seu código de acesso ao PULSO', htmlContent: `<div style="background:#f4f0e6;padding:32px;font-family:Arial,sans-serif;color:#101010"><div style="max-width:520px;margin:auto;border:1px solid #101010;background:#fbf9f2;padding:28px"><p style="font-size:12px;letter-spacing:2px">PULSO / TIKTOK FEEDBACK HELPERS</p><h1 style="font-size:34px;margin:24px 0 8px">O seu código</h1><p>Use este código para entrar na comunidade:</p><p style="font:700 42px monospace;letter-spacing:10px;margin:28px 0">${code}</p><p style="font-size:13px">Expira em 10 minutos. Se não pediu este acesso, ignore este e-mail.</p></div></div>` }) });
+    const delivery = await fetch('https://api.brevo.com/v3/smtp/email', { method: 'POST', headers: { accept: 'application/json', 'api-key': apiKey, 'content-type': 'application/json' }, body: JSON.stringify({ templateId: 3, sender: { email: senderEmail, name: senderName }, to: [{ email }], params: { code } }) });
     if (!delivery.ok) throw new Error(`brevo_${delivery.status}`);
     return NextResponse.json({ ok: true });
   } catch (error) {
