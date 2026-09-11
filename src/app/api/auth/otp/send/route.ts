@@ -16,7 +16,7 @@ export async function POST(request: Request) {
     if (prior && Date.now() - new Date(prior.sent_at).getTime() < 60_000) return NextResponse.json({ error: 'cooldown' }, { status: 429 });
     const code = String(randomInt(0, 1_000_000)).padStart(6, '0');
     const { error: upsertError } = await admin.from('email_login_codes').upsert({ email, code_hash: hashCode(email, code), expires_at: new Date(Date.now() + 10 * 60_000).toISOString(), attempts: 0, sent_at: new Date().toISOString(), consumed_at: null });
-    if (upsertError) throw upsertError;
+    if (upsertError) throw new Error(`otp_upsert_${upsertError.code ?? 'unknown'}:${upsertError.message}`);
     const apiKey = process.env.BREVO_API_KEY;
     const senderEmail = process.env.BREVO_SENDER_EMAIL ?? 'noreply@auth.tkoi.online';
     const senderName = process.env.BREVO_SENDER_NAME ?? 'PULSO';
@@ -25,7 +25,7 @@ export async function POST(request: Request) {
     if (!delivery.ok) throw new Error(`brevo_${delivery.status}`);
     return NextResponse.json({ ok: true });
   } catch (error) {
-    console.error('[otp-send]', error instanceof Error ? error.message : 'unknown');
+    console.error('[otp-send]', error instanceof Error ? error.message : JSON.stringify(error));
     return NextResponse.json({ error: 'delivery_failed' }, { status: 500 });
   }
 }
