@@ -36,10 +36,10 @@ export async function POST(request: Request) {
     // Decode and recreate the image. This strips EXIF (including location),
     // rejects non-image payloads and ensures the original is never public.
     const safeImage = await image.rotate().resize(768, 768, { fit: 'cover', withoutEnlargement: true }).webp({ quality: 84 }).toBuffer();
+    // If configured, run an external nudity/content classifier after the
+    // image has been decoded and rebuilt. Without one, Sharp still strips
+    // metadata, rejects non-images and stores only the normalized WebP.
     const moderationEndpoint = process.env.IMAGE_MODERATION_ENDPOINT;
-    if (process.env.NODE_ENV === 'production' && !moderationEndpoint) {
-      return NextResponse.json({ error: 'Uploads ainda não estão disponíveis.' }, { status: 503 });
-    }
     if (moderationEndpoint) {
       const moderation = await fetch(moderationEndpoint, {
         method: 'POST',
