@@ -168,6 +168,8 @@ export default function HomePage() {
 
 function AuthScreen() {
   const [email, setEmail] = useState('');
+  const [code, setCode] = useState('');
+  const [step, setStep] = useState<'email' | 'code'>('email');
   const [status, setStatus] = useState('');
   const [sending, setSending] = useState(false);
 
@@ -178,11 +180,29 @@ function AuthScreen() {
     setStatus('');
     const supabase = createBrowserSupabaseClient();
     const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+      email: email.trim(),
     });
     setSending(false);
-    setStatus(error ? 'Não foi possível enviar o acesso. Tente novamente.' : 'Enviámos um link seguro para o seu e-mail.');
+    if (error) {
+      setStatus('Não foi possível enviar o código. Tente novamente dentro de instantes.');
+      return;
+    }
+    setStep('code');
+    setStatus(`Enviámos um código de 6 dígitos para ${email.trim()}.`);
+  }
+
+  async function verifyCode(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!hasSupabaseConfig || !/^\d{6}$/.test(code)) {
+      setStatus('Insira os 6 números recebidos no e-mail.');
+      return;
+    }
+    setSending(true);
+    setStatus('');
+    const supabase = createBrowserSupabaseClient();
+    const { error } = await supabase.auth.verifyOtp({ email: email.trim(), token: code, type: 'email' });
+    setSending(false);
+    setStatus(error ? 'Código inválido ou expirado. Peça um novo código.' : '');
   }
 
   return <main className="auth-shell">
@@ -191,11 +211,16 @@ function AuthScreen() {
       <div className="eyebrow"><span className="live-dot" /> ENTRADA DA COMUNIDADE</div>
       <h1 id="access-title">Entre no pulso.</h1>
       <p>Use o seu e-mail. Não precisa criar nem memorizar uma palavra-passe.</p>
-      <form onSubmit={requestAccess}>
+      {step === 'email' ? <form onSubmit={requestAccess}>
         <label htmlFor="email">O seu e-mail</label>
         <input id="email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="voce@email.com" autoComplete="email" required />
-        <button className="primary-action" type="submit" disabled={sending}>{sending ? 'A enviar…' : 'Receber link de acesso'}</button>
-      </form>
+        <button className="primary-action" type="submit" disabled={sending}>{sending ? 'A enviar…' : 'Receber código de acesso'}</button>
+      </form> : <form onSubmit={verifyCode}>
+        <label htmlFor="access-code">Código de 6 dígitos</label>
+        <input id="access-code" type="text" value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, '').slice(0, 6))} inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} placeholder="000000" required />
+        <button className="primary-action" type="submit" disabled={sending}>{sending ? 'A verificar…' : 'Entrar no PULSO'}</button>
+        <button className="secondary-action" type="button" onClick={() => { setCode(''); setStep('email'); setStatus(''); }} disabled={sending}>Alterar e-mail</button>
+      </form>}
       {status && <p className="notice" role="status">{status}</p>}
     </section>
   </main>;
