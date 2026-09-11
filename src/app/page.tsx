@@ -178,13 +178,11 @@ function AuthScreen() {
     if (!hasSupabaseConfig) return;
     setSending(true);
     setStatus('');
-    const supabase = createBrowserSupabaseClient();
-    const { error } = await supabase.auth.signInWithOtp({
-      email: email.trim(),
-    });
+    const response = await fetch('/api/auth/otp/send', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: email.trim() }) });
+    const result = await response.json().catch(() => ({}));
     setSending(false);
-    if (error) {
-      setStatus('Não foi possível enviar o código. Tente novamente dentro de instantes.');
+    if (!response.ok) {
+      setStatus(result.error === 'cooldown' ? 'Aguarde 60 segundos antes de pedir outro código.' : 'Não foi possível enviar o código. Tente novamente dentro de instantes.');
       return;
     }
     setStep('code');
@@ -199,10 +197,10 @@ function AuthScreen() {
     }
     setSending(true);
     setStatus('');
-    const supabase = createBrowserSupabaseClient();
-    const { error } = await supabase.auth.verifyOtp({ email: email.trim(), token: code, type: 'email' });
+    const response = await fetch('/api/auth/otp/verify', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: email.trim(), code }) });
     setSending(false);
-    setStatus(error ? 'Código inválido ou expirado. Peça um novo código.' : '');
+    if (!response.ok) setStatus('Código inválido ou expirado. Peça um novo código.');
+    else window.location.reload();
   }
 
   return <main className="auth-shell">
