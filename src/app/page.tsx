@@ -1,11 +1,12 @@
 'use client';
 
-import { FormEvent, useEffect, useState } from 'react';
+import { ChangeEvent, FormEvent, useEffect, useState } from 'react';
 import type { User } from '@supabase/supabase-js';
 import { createBrowserSupabaseClient, hasSupabaseConfig } from '@/lib/supabase/browser';
 
 type View = 'tutorial' | 'feed' | 'evaluate' | 'publish' | 'profile';
 type MissionKind = 'tutorial' | 'standard';
+type ProfileData = { display_name: string; username: string; tiktok_profile_url: string; niche: string; bio: string; avatar_path?: string | null; tiktok_screenshot_path?: string | null };
 
 const campaign = {
   pulse: 'PULSO #041',
@@ -26,6 +27,12 @@ export default function HomePage() {
   const [answer, setAnswer] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
   const [missionKind, setMissionKind] = useState<MissionKind>('tutorial');
+  const [activeMission, setActiveMission] = useState(false);
+  const [profile, setProfile] = useState<ProfileData>({ display_name: '', username: '', tiktok_profile_url: '', niche: '', bio: '' });
+  const [profileDraft, setProfileDraft] = useState(profile);
+  const [profileEditing, setProfileEditing] = useState(false);
+  const [campaignPrompt, setCampaignPrompt] = useState('');
+  const [publishing, setPublishing] = useState(false);
 
   useEffect(() => {
     if (!hasSupabaseConfig) {
@@ -33,8 +40,16 @@ export default function HomePage() {
       return;
     }
     const supabase = createBrowserSupabaseClient();
-    supabase.auth.getSession().then(({ data }) => {
+    supabase.auth.getSession().then(async ({ data }) => {
       setUser(data.session?.user ?? null);
+      if (data.session?.user) {
+        const [{ data: profileRow }, { data: pointTotal }] = await Promise.all([
+          supabase.from('profiles').select('display_name,username,tiktok_profile_url,niche,bio,avatar_path,tiktok_screenshot_path').eq('id', data.session.user.id).maybeSingle(),
+          supabase.rpc('current_points'),
+        ]);
+        if (profileRow) { setProfile(profileRow as ProfileData); setProfileDraft(profileRow as ProfileData); }
+        if (typeof pointTotal === 'number') setPoints(pointTotal);
+      }
       setAuthLoading(false);
     });
     const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => setUser(session?.user ?? null));
@@ -42,6 +57,12 @@ export default function HomePage() {
   }, []);
 
   function beginMission(kind: MissionKind) {
+    if (activeMission) {
+      setNotice('Termine a missão aberta antes de iniciar outra.');
+      setView('evaluate');
+      return;
+    }
+    setActiveMission(true);
     setMissionKind(kind);
     setNotice('Missão iniciada. Ao voltar do TikTok, envie a sua avaliação.');
     window.setTimeout(() => setView('evaluate'), 500);
@@ -62,8 +83,42 @@ export default function HomePage() {
       setView('feed');
       setNotice('Tutorial concluído. A sua conta está ativa.');
     }
+    setActiveMission(false);
     setFeedback('');
     setAnswer(null);
+  }
+
+  async function launchCampaign(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (activeMission) { setNotice('Termine a missão aberta antes de publicar uma campanha.'); setView('evaluate'); return; }
+    if (points < 1) { setNotice('É preciso ter pelo menos 1 ponto para lançar uma campanha.'); return; }
+    if (!profile.tiktok_profile_url) { setNotice('Complete o seu perfil com o link do TikTok antes de publicar.'); setView('profile'); return; }
+    if (campaignPrompt.trim().length < 12) { setNotice('Escreva uma pergunta com pelo menos 12 caracteres.'); return; }
+    setPublishing(true);
+    const supabase = createBrowserSupabaseClient();
+    const { error } = await supabase.rpc('create_normal_campaign', { p_prompt: campaignPrompt.trim(), p_niche: profile.niche || 'GERAL', p_feedback_target: 1 });
+    setPublishing(false);
+    if (error) { setNotice(error.message.includes('insufficient_points') ? 'Você não tem pontos suficientes.' : 'Não foi possível lançar a campanha agora.'); return; }
+    setPoints((value) => value - 1); setCampaignPrompt(''); setNotice('Campanha lançada. Ela já está disponível no For You.'); setView('feed');
+  }
+
+  async function saveProfile(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const supabase = createBrowserSupabaseClient();
+    const { error } = await supabase.from('profiles').update(profileDraft).eq('id', user?.id);
+    if (error) { setNotice('Não foi possível guardar o perfil. Verifique o link do TikTok.'); return; }
+    setProfile(profileDraft); setProfileEditing(false); setNotice('Perfil atualizado.');
+  }
+
+  async function uploadProfileImage(event: ChangeEvent<HTMLInputElement>, kind: 'avatar' | 'screenshot') {
+    const file = event.target.files?.[0]; if (!file) return;
+    const body = new FormData(); body.set('file', file); body.set('kind', kind);
+    const response = await fetch('/api/profile/avatar', { method: 'POST', body });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) { setNotice(result.error || 'Não foi possível processar a imagem.'); return; }
+    setProfile((current) => ({ ...current, ...(kind === 'avatar' ? { avatar_path: result.path } : { tiktok_screenshot_path: result.path }) }));
+    setProfileDraft((current) => ({ ...current, ...(kind === 'avatar' ? { avatar_path: result.path } : { tiktok_screenshot_path: result.path }) }));
+    setNotice(kind === 'avatar' ? 'Foto de perfil atualizada.' : 'Screenshot do TikTok atualizada.');
   }
 
   const title = view === 'tutorial'
@@ -94,7 +149,7 @@ export default function HomePage() {
         <div className="eyebrow"><span className="live-dot" /> {view === 'tutorial' ? 'ACESSO PENDENTE' : 'COMUNIDADE ATIVA'}</div>
         <h1 id="screen-title">{title}</h1>
 
-        {notice && <p className="notice" role="status">{notice}</p>}
+        {notice && <button className="notice notice-action" role="status" onClick={() => activeMission && setView('evaluate')}>{notice}</button>}
 
         {view === 'tutorial' && (
           <>
@@ -138,19 +193,30 @@ export default function HomePage() {
         )}
 
         {view === 'publish' && (
-          <section className="publish-card">
+          <form className="publish-card" onSubmit={launchCampaign}>
             <span className="mission-tag">A SUA CAMPANHA</span>
             <h2>Peça feedback sobre algo específico.</h2>
             <label htmlFor="campaign-question">O que quer saber?</label>
-            <textarea id="campaign-question" placeholder="A minha bio deixa claro o que eu posto?" maxLength={220} />
+            <textarea id="campaign-question" value={campaignPrompt} onChange={(event) => setCampaignPrompt(event.target.value)} placeholder="A minha bio deixa claro o que eu posto?" minLength={12} maxLength={220} required />
             <div className="purchase-row"><span>1 feedback</span><b>1 ponto</b></div>
-            <button className="primary-action" disabled={points < 1}>Lançar campanha <span>−1</span></button>
-          </section>
+            <button className="primary-action" type="submit" disabled={publishing || points < 1}>{publishing ? 'A lançar…' : 'Lançar campanha'} <span>−1</span></button>
+          </form>
         )}
 
         {view === 'profile' && (
           <section className="account-card">
-            <div className="account-head"><Avatar initials="Y" large /><div><span>O SEU PERFIL</span><h2>@o_seu_tiktok</h2><p>Adicione a sua foto e link TikTok ao concluir o cadastro.</p></div></div>
+            <div className="account-head"><Avatar initials={(profile.display_name || 'Y').slice(0, 1).toUpperCase()} large /><div><span>O SEU PERFIL</span><h2>{profile.username ? `@${profile.username.replace(/^@/, '')}` : '@o_seu_tiktok'}</h2><p>{profile.tiktok_profile_url || 'Adicione o seu link do TikTok para começar.'}</p></div></div>
+            {profileEditing ? <form className="profile-form" onSubmit={saveProfile}>
+              <label htmlFor="profile-name">Nome<input id="profile-name" value={profileDraft.display_name} onChange={(event) => setProfileDraft({ ...profileDraft, display_name: event.target.value })} /></label>
+              <label htmlFor="profile-username">@ do TikTok<input id="profile-username" value={profileDraft.username} onChange={(event) => setProfileDraft({ ...profileDraft, username: event.target.value.replace(/^@/, '') })} placeholder="o_seu_tiktok" required /></label>
+              <label htmlFor="profile-url">Link do perfil TikTok<input id="profile-url" type="url" pattern="https://(www\\.)?tiktok\\.com/@[A-Za-z0-9._-]+/?" value={profileDraft.tiktok_profile_url} onChange={(event) => setProfileDraft({ ...profileDraft, tiktok_profile_url: event.target.value })} placeholder="https://www.tiktok.com/@o_seu_tiktok" required /></label>
+              <label htmlFor="profile-niche">Nicho<input id="profile-niche" value={profileDraft.niche} onChange={(event) => setProfileDraft({ ...profileDraft, niche: event.target.value })} placeholder="Ex.: receitas" /></label>
+              <label htmlFor="profile-bio">Bio<textarea id="profile-bio" value={profileDraft.bio} onChange={(event) => setProfileDraft({ ...profileDraft, bio: event.target.value })} maxLength={220} /></label>
+              <label className="upload-label">Foto de perfil<input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" onChange={(event) => void uploadProfileImage(event, 'avatar')} /></label>
+              <label className="upload-label">Screenshot do perfil TikTok<input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" onChange={(event) => void uploadProfileImage(event, 'screenshot')} /></label>
+              <button className="primary-action" type="submit">Guardar perfil</button>
+              <button className="secondary-action" type="button" onClick={() => setProfileEditing(false)}>Cancelar</button>
+            </form> : <button className="secondary-action edit-profile" onClick={() => { setProfileDraft(profile); setProfileEditing(true); }}>Editar perfil</button>}
             <div className="stats"><div><b>{points}</b><span>PONTOS</span></div><div><b>0</b><span>RECEBIDOS</span></div><div><b>1</b><span>ENVIADO</span></div></div>
             <button className="secondary-action" onClick={async () => { const supabase = createBrowserSupabaseClient(); await supabase.auth.signOut(); }}>Sair da conta</button>
           </section>
@@ -158,9 +224,9 @@ export default function HomePage() {
       </section>
 
       {view !== 'tutorial' && <nav className="bottom-nav" aria-label="Navegação principal">
-        <button className={view === 'feed' || view === 'evaluate' ? 'active' : ''} onClick={() => setView('feed')}><span>01</span>For You</button>
-        <button className={view === 'publish' ? 'active' : ''} onClick={() => setView('publish')}><span>02</span>Publicar</button>
-        <button className={view === 'profile' ? 'active' : ''} onClick={() => setView('profile')}><span>03</span>Conta</button>
+        <button className={view === 'feed' || view === 'evaluate' ? 'active' : ''} onClick={() => setView('feed')}><Icon name="home" /><span>For You</span></button>
+        <button className={view === 'publish' ? 'active' : ''} onClick={() => setView('publish')}><Icon name="plus" /><span>Publicar</span></button>
+        <button className={view === 'profile' ? 'active' : ''} onClick={() => setView('profile')}><Icon name="user" /><span>Conta</span></button>
       </nav>}
     </main>
   );
@@ -278,4 +344,10 @@ function CampaignCard({ admin = false, onAction }: { admin?: boolean; onAction: 
 
 function Avatar({ initials, large = false }: { initials: string; large?: boolean }) {
   return <span className={large ? 'avatar avatar-large' : 'avatar'} aria-hidden="true">{initials}</span>;
+}
+
+function Icon({ name }: { name: 'home' | 'plus' | 'user' }) {
+  if (name === 'plus') return <svg className="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>;
+  if (name === 'user') return <svg className="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.5" /><path d="M4.5 20c.7-3.4 3.1-5 7.5-5s6.8 1.6 7.5 5" /></svg>;
+  return <svg className="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m4 11 8-7 8 7v9H4z" /><path d="M9 20v-6h6v6" /></svg>;
 }
