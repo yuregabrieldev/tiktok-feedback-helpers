@@ -214,9 +214,19 @@ function AuthScreen() {
     setSending(true);
     setStatus('');
     const response = await fetch('/api/auth/otp/verify', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: email.trim(), code }) });
+    const result = await response.json().catch(() => ({}));
     setSending(false);
-    if (!response.ok) setStatus('Código inválido ou expirado. Peça um novo código.');
-    else window.location.reload();
+    if (!response.ok || !result.session) {
+      setStatus('Código inválido ou expirado. Peça um novo código.');
+      return;
+    }
+    const supabase = createBrowserSupabaseClient();
+    const { error } = await supabase.auth.setSession(result.session);
+    if (error) {
+      setStatus('Não foi possível iniciar a sessão. Tente novamente.');
+      return;
+    }
+    window.location.reload();
   }
 
   return <main className="auth-shell">

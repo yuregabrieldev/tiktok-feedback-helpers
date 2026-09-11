@@ -29,9 +29,11 @@ export async function POST(request: Request) {
     const cookieStore = await cookies();
     const response = NextResponse.json({ ok: true });
     const supabase = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!, { cookies: { getAll: () => cookieStore.getAll(), setAll: values => values.forEach(({ name, value, options }) => response.cookies.set(name, value, options)) } });
-    const { error: verifyError } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: 'email' });
+    const { data: authData, error: verifyError } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: 'email' });
     if (verifyError) throw verifyError;
-    return response;
+    const finalResponse = NextResponse.json({ ok: true, session: authData.session }, { headers: { 'Cache-Control': 'no-store' } });
+    response.cookies.getAll().forEach((cookie) => finalResponse.cookies.set(cookie));
+    return finalResponse;
   } catch (error) {
     console.error('[otp-verify]', error instanceof Error ? error.message : 'unknown');
     return NextResponse.json({ error: 'verification_failed' }, { status: 500 });
