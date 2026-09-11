@@ -6,17 +6,8 @@ import { createBrowserSupabaseClient, hasSupabaseConfig } from '@/lib/supabase/b
 
 type View = 'tutorial' | 'feed' | 'evaluate' | 'publish' | 'profile';
 type MissionKind = 'tutorial' | 'standard';
-type ProfileData = { display_name: string; username: string; tiktok_profile_url: string; niche: string; bio: string; avatar_path?: string | null; tiktok_screenshot_path?: string | null };
-
-const campaign = {
-  pulse: 'PULSO #041',
-  niche: 'RECEITAS',
-  handle: '@marianaem15',
-  name: 'Mariana',
-  description: 'Receitas práticas para quem não tem tempo.',
-  request: 'A minha bio explica claramente o que eu posto?',
-  initials: 'M',
-};
+type ProfileData = { display_name: string; username: string; tiktok_profile_url: string; niche: string; bio: string; avatar_path?: string | null; tiktok_screenshot_path?: string | null; tutorial_completed_at?: string | null; is_admin?: boolean };
+type CampaignData = { id: string; kind: 'normal' | 'seed' | 'featured' | 'tutorial'; niche: string | null; prompt: string; title: string; creator_id: string; creator: { display_name: string; username: string; tiktok_profile_url: string | null; niche: string | null; bio: string } | null; feedback_completed: number; feedback_target: number };
 
 export default function HomePage() {
   const [authLoading, setAuthLoading] = useState(true);
@@ -33,6 +24,12 @@ export default function HomePage() {
   const [profileEditing, setProfileEditing] = useState(false);
   const [campaignPrompt, setCampaignPrompt] = useState('');
   const [publishing, setPublishing] = useState(false);
+  const [campaigns, setCampaigns] = useState<CampaignData[]>([]);
+  const [selectedCampaign, setSelectedCampaign] = useState<CampaignData | null>(null);
+  const [missionId, setMissionId] = useState<string | null>(null);
+  const [dataLoading, setDataLoading] = useState(false);
+  const [receivedCount, setReceivedCount] = useState(0);
+  const [sentCount, setSentCount] = useState(0);
 
   useEffect(() => {
     if (!hasSupabaseConfig) {
@@ -44,11 +41,12 @@ export default function HomePage() {
       setUser(data.session?.user ?? null);
       if (data.session?.user) {
         const [{ data: profileRow }, { data: pointTotal }] = await Promise.all([
-          supabase.from('profiles').select('display_name,username,tiktok_profile_url,niche,bio,avatar_path,tiktok_screenshot_path').eq('id', data.session.user.id).maybeSingle(),
+          supabase.from('profiles').select('display_name,username,tiktok_profile_url,niche,bio,avatar_path,tiktok_screenshot_path,tutorial_completed_at,is_admin').eq('id', data.session.user.id).maybeSingle(),
           supabase.rpc('current_points'),
         ]);
-        if (profileRow) { setProfile(profileRow as ProfileData); setProfileDraft(profileRow as ProfileData); }
+        if (profileRow) { setProfile(profileRow as ProfileData); setProfileDraft(profileRow as ProfileData); setView((profileRow as ProfileData).tutorial_completed_at ? 'feed' : 'tutorial'); }
         if (typeof pointTotal === 'number') setPoints(pointTotal);
+        await loadCommunityData(data.session.user.id);
       }
       setAuthLoading(false);
     });
@@ -56,36 +54,65 @@ export default function HomePage() {
     return () => subscription.subscription.unsubscribe();
   }, []);
 
-  function beginMission(kind: MissionKind) {
+  async function loadCommunityData(userId: string) {
+    setDataLoading(true);
+    const supabase = createBrowserSupabaseClient();
+    const [{ data: rows }, { data: feedbackRows }, { data: receivedRows }, { data: sentRows }] = await Promise.all([
+      supabase.from('campaigns').select('id,kind,niche,prompt,title,creator_id,feedback_completed,feedback_target,creator:profiles!campaigns_creator_id_fkey(display_name,username,tiktok_profile_url,niche,bio)').eq('status', 'active').order('created_at', { ascending: false }),
+      supabase.from('feedbacks').select('campaign_id').eq('reviewer_id', userId),
+      supabase.from('feedbacks').select('id,campaigns!inner(creator_id)').eq('campaigns.creator_id', userId),
+      supabase.from('campaigns').select('id').eq('creator_id', userId),
+    ]);
+    const completed = new Set((feedbackRows ?? []).map((row: { campaign_id: string }) => row.campaign_id));
+    const available = ((rows ?? []) as unknown as CampaignData[]).filter((row) => row.creator_id !== userId && !completed.has(row.id) && row.feedback_completed < row.feedback_target);
+    setCampaigns(available);
+    setSelectedCampaign((current) => current && available.some((item) => item.id === current.id) ? current : available[0] ?? null);
+    setReceivedCount((receivedRows ?? []).length);
+    setSentCount((sentRows ?? []).length);
+    setDataLoading(false);
+  }
+
+  async function beginMission(kind: MissionKind, item = selectedCampaign) {
     if (activeMission) {
       setNotice('Termine a missão aberta antes de iniciar outra.');
       setView('evaluate');
       return;
     }
+    if (!item) { setNotice('Não há campanhas disponíveis neste momento.'); return; }
+    const supabase = createBrowserSupabaseClient();
+    const { data, error } = await supabase.rpc('start_mission', { p_campaign_id: item.id });
+    if (error || !data?.[0]) { setNotice(error?.message.includes('already_completed') ? 'Você já avaliou esta campanha.' : 'Não foi possível iniciar esta missão.'); return; }
+    setMissionId(data[0].mission_id);
+    setSelectedCampaign(item);
     setActiveMission(true);
     setMissionKind(kind);
     setNotice('Missão iniciada. Ao voltar do TikTok, envie a sua avaliação.');
-    window.setTimeout(() => setView('evaluate'), 500);
+    window.open(data[0].tiktok_profile_url, '_blank', 'noopener,noreferrer');
+    setView('evaluate');
   }
 
-  function submitFeedback(event: FormEvent<HTMLFormElement>) {
+  async function submitFeedback(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!answer || feedback.trim().length < 20) {
       setNotice('Escolha uma resposta e escreva uma sugestão com pelo menos 20 caracteres.');
       return;
     }
 
-    if (missionKind === 'standard') {
-      setPoints(1);
-      setView('feed');
-      setNotice('Feedback enviado. Ganhou o seu primeiro ponto.');
-    } else {
-      setView('feed');
-      setNotice('Tutorial concluído. A sua conta está ativa.');
-    }
+    if (!missionId) { setNotice('Não há uma missão ativa para concluir.'); return; }
+    const supabase = createBrowserSupabaseClient();
+    const { data: result, error } = await supabase.rpc('submit_feedback', { p_mission_id: missionId, p_bio_clarity: answer === 'Sim' ? 'yes' : answer === 'Mais ou menos' ? 'partly' : 'no', p_suggestion: feedback.trim() });
+    if (error) { setNotice(error.message.includes('not_eligible') ? 'Aguarde os 15 segundos de análise antes de enviar.' : 'Não foi possível enviar este feedback.'); return; }
+    const awarded = result?.[0]?.awarded_points ?? 0;
+    const { data: total } = await supabase.rpc('current_points');
+    if (typeof total === 'number') setPoints(total);
+    if (result?.[0]?.tutorial_completed) setProfile((current) => ({ ...current, tutorial_completed_at: new Date().toISOString() }));
+    setView('feed');
+    setNotice(awarded > 0 ? `Feedback enviado. Ganhou ${awarded} ponto.` : 'Feedback enviado. A sua conta está ativa.');
     setActiveMission(false);
+    setMissionId(null);
     setFeedback('');
     setAnswer(null);
+    if (user) await loadCommunityData(user.id);
   }
 
   async function launchCampaign(event: FormEvent<HTMLFormElement>) {
@@ -154,7 +181,7 @@ export default function HomePage() {
         {view === 'tutorial' && (
           <>
             <p className="intro">Antes de entrar na comunidade, complete a primeira avaliação.</p>
-            <CampaignCard admin onAction={() => beginMission('tutorial')} />
+            {dataLoading ? <p className="empty-state">A carregar a missão de acesso…</p> : <CampaignCard campaign={campaigns.find((item) => item.kind === 'tutorial') ?? null} admin onAction={() => void beginMission('tutorial', campaigns.find((item) => item.kind === 'tutorial') ?? null)} />}
             <p className="rule">Esta missão ativa a sua conta. Não concede pontos.</p>
           </>
         )}
@@ -165,7 +192,7 @@ export default function HomePage() {
               <span>PRONTO PARA PUBLICAR</span>
               <b>{points} ponto disponível</b>
             </section>
-            <CampaignCard onAction={() => beginMission('standard')} />
+            {dataLoading ? <p className="empty-state">A carregar campanhas…</p> : <CampaignCard campaign={selectedCampaign} onAction={() => void beginMission('standard')} />}
             <section className="feed-next" aria-label="Próximas campanhas">
               <span>PRÓXIMOS PULSOS</span>
               <p>O feed será preenchido com campanhas que ainda não avaliou.</p>
@@ -176,7 +203,7 @@ export default function HomePage() {
         {view === 'evaluate' && (
           <form className="evaluation" onSubmit={submitFeedback}>
             <span className="mission-tag">MISSÃO EM AVALIAÇÃO</span>
-            <div className="mini-profile"><Avatar initials={campaign.initials} /><div><b>{campaign.handle}</b><span>{campaign.niche}</span></div></div>
+            <div className="mini-profile"><Avatar initials={(selectedCampaign?.creator?.display_name || selectedCampaign?.creator?.username || '?').slice(0, 1).toUpperCase()} /><div><b>@{selectedCampaign?.creator?.username || 'perfil'}</b><span>{selectedCampaign?.niche || 'COMUNIDADE'}</span></div></div>
             <h2>Como foi conhecer este perfil?</h2>
             <fieldset>
               <legend>A bio deixa claro o nicho?</legend>
@@ -216,7 +243,7 @@ export default function HomePage() {
               <button className="primary-action" type="submit">Guardar perfil</button>
               <button className="secondary-action" type="button" onClick={() => setProfileEditing(false)}>Cancelar</button>
             </form> : <button className="secondary-action edit-profile" onClick={() => { setProfileDraft(profile); setProfileEditing(true); }}>Editar perfil</button>}
-            <div className="stats"><div><b>{points}</b><span>PONTOS</span></div><div><b>0</b><span>RECEBIDOS</span></div><div><b>1</b><span>ENVIADO</span></div></div>
+            <div className="stats"><div><b>{points}</b><span>PONTOS</span></div><div><b>{receivedCount}</b><span>RECEBIDOS</span></div><div><b>{sentCount}</b><span>ENVIADAS</span></div></div>
             <button className="secondary-action" onClick={async () => { const supabase = createBrowserSupabaseClient(); await supabase.auth.signOut(); }}>Sair da conta</button>
           </section>
         )}
@@ -320,23 +347,14 @@ function Brand() {
   return <div className="brand brand-static"><span className="pulse-mark" aria-hidden="true"><i /><i /><i /></span><strong>PULSO</strong><small>TIKTOK FEEDBACK HELPERS</small></div>;
 }
 
-function CampaignCard({ admin = false, onAction }: { admin?: boolean; onAction: () => void }) {
-  const current = admin ? {
-    ...campaign,
-    pulse: 'TUTORIAL · ADMIN',
-    niche: 'BOAS-VINDAS',
-    handle: '@olipelomundo',
-    name: 'Olí Indica',
-    description: 'A primeira avaliação ativa a sua conta no PULSO.',
-    request: 'A bio deixa claro o que este perfil oferece?',
-    initials: 'P',
-  } : campaign;
-
+function CampaignCard({ campaign, admin = false, onAction }: { campaign: CampaignData | null; admin?: boolean; onAction: () => void }) {
+  if (!campaign) return <section className="empty-state"><b>{admin ? 'Missão de acesso indisponível' : 'Nenhum pulso disponível'}</b><p>Volte em instantes. As campanhas ativas aparecem aqui automaticamente.</p></section>;
+  const creator = campaign.creator;
   return <article className="campaign-card">
-    <div className="card-top"><span>{current.pulse}</span><span>{current.niche}</span></div>
-    <div className="creator"><Avatar initials={current.initials} /><div><b>{current.handle}</b><span>{current.name}</span></div></div>
-    <p className="creator-description">{current.description}</p>
-    <div className="request"><span>PEDIDO DA VEZ</span><p>“{current.request}”</p></div>
+    <div className="card-top"><span>{campaign.kind === 'tutorial' ? 'TUTORIAL · ADMIN' : `PULSO · ${campaign.id.slice(0, 4).toUpperCase()}`}</span><span>{campaign.niche || creator?.niche || 'GERAL'}</span></div>
+    <div className="creator"><Avatar initials={(creator?.display_name || creator?.username || '?').slice(0, 1).toUpperCase()} /><div><b>@{creator?.username || 'perfil'}</b><span>{creator?.display_name || 'Criador'}</span></div></div>
+    <p className="creator-description">{creator?.bio || 'Peça uma leitura honesta de alguém da comunidade.'}</p>
+    <div className="request"><span>PEDIDO DA VEZ</span><p>“{campaign.prompt}”</p></div>
     <button className="primary-action" onClick={onAction}>Conhecer e avaliar {!admin && <span>+1</span>}</button>
   </article>;
 }
