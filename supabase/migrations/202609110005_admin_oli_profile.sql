@@ -47,6 +47,38 @@ $$;
 revoke all on function public.admin_update_profile(uuid, text, text, text, text, text) from public;
 grant execute on function public.admin_update_profile(uuid, text, text, text, text, text) to authenticated;
 
+create or replace function public.admin_update_campaign(
+  p_campaign_id uuid,
+  p_title text,
+  p_prompt text,
+  p_niche text,
+  p_status public.campaign_status,
+  p_feedback_target smallint
+)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if not exists (select 1 from public.profiles where id = auth.uid() and is_admin = true and is_suspended = false) then
+    raise exception 'admin_required';
+  end if;
+  if p_feedback_target < 1 or p_feedback_target > 10 then raise exception 'invalid_target'; end if;
+  if char_length(trim(p_prompt)) < 12 or char_length(trim(p_prompt)) > 220 then raise exception 'invalid_prompt'; end if;
+  update public.campaigns
+  set title = left(trim(coalesce(p_title, '')), 120),
+      prompt = trim(p_prompt),
+      niche = nullif(left(trim(coalesce(p_niche, '')), 80), ''),
+      status = p_status,
+      feedback_target = p_feedback_target
+  where id = p_campaign_id;
+end;
+$$;
+
+revoke all on function public.admin_update_campaign(uuid, text, text, text, public.campaign_status, smallint) from public;
+grant execute on function public.admin_update_campaign(uuid, text, text, text, public.campaign_status, smallint) to authenticated;
+
 drop policy if exists "users update their own profile" on public.profiles;
 create policy "users update their own profile"
   on public.profiles for update to authenticated

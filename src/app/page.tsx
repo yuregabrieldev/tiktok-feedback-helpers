@@ -7,7 +7,7 @@ import { createBrowserSupabaseClient, hasSupabaseConfig } from '@/lib/supabase/b
 type View = 'tutorial' | 'feed' | 'evaluate' | 'publish' | 'profile';
 type MissionKind = 'tutorial' | 'standard';
 type ProfileData = { display_name: string; username: string; tiktok_profile_url: string; niche: string; bio: string; avatar_path?: string | null; tiktok_screenshot_path?: string | null; tutorial_completed_at?: string | null; is_admin?: boolean };
-type CampaignData = { id: string; kind: 'normal' | 'seed' | 'featured' | 'tutorial'; niche: string | null; prompt: string; title: string; creator_id: string; creator: { display_name: string; username: string; tiktok_profile_url: string | null; niche: string | null; bio: string } | null; feedback_completed: number; feedback_target: number };
+type CampaignData = { id: string; kind: 'normal' | 'seed' | 'featured' | 'tutorial'; status?: string; niche: string | null; prompt: string; title: string; creator_id: string; creator: { display_name: string; username: string; tiktok_profile_url: string | null; niche: string | null; bio: string } | null; feedback_completed: number; feedback_target: number };
 
 export default function HomePage() {
   const [authLoading, setAuthLoading] = useState(true);
@@ -30,6 +30,9 @@ export default function HomePage() {
   const [dataLoading, setDataLoading] = useState(false);
   const [receivedCount, setReceivedCount] = useState(0);
   const [sentCount, setSentCount] = useState(0);
+  const [adminCampaigns, setAdminCampaigns] = useState<CampaignData[]>([]);
+  const [adminEditingId, setAdminEditingId] = useState<string | null>(null);
+  const [adminDraft, setAdminDraft] = useState({ title: '', prompt: '', niche: '', status: 'active', feedback_target: 10 });
 
   useEffect(() => {
     if (!hasSupabaseConfig) {
@@ -57,14 +60,19 @@ export default function HomePage() {
   async function loadCommunityData(userId: string) {
     setDataLoading(true);
     const supabase = createBrowserSupabaseClient();
+    const { data: viewer } = await supabase.from('profiles').select('is_admin').eq('id', userId).maybeSingle();
+    let campaignQuery = supabase.from('campaigns').select('id,kind,status,niche,prompt,title,creator_id,feedback_completed,feedback_target,creator:profiles!campaigns_creator_id_fkey(display_name,username,tiktok_profile_url,niche,bio)').order('created_at', { ascending: false });
+    if (!viewer?.is_admin) campaignQuery = campaignQuery.eq('status', 'active');
     const [{ data: rows }, { data: feedbackRows }, { data: receivedRows }, { data: sentRows }] = await Promise.all([
-      supabase.from('campaigns').select('id,kind,niche,prompt,title,creator_id,feedback_completed,feedback_target,creator:profiles!campaigns_creator_id_fkey(display_name,username,tiktok_profile_url,niche,bio)').eq('status', 'active').order('created_at', { ascending: false }),
+      campaignQuery,
       supabase.from('feedbacks').select('campaign_id').eq('reviewer_id', userId),
       supabase.from('feedbacks').select('id,campaigns!inner(creator_id)').eq('campaigns.creator_id', userId),
       supabase.from('campaigns').select('id').eq('creator_id', userId),
     ]);
     const completed = new Set((feedbackRows ?? []).map((row: { campaign_id: string }) => row.campaign_id));
-    const available = ((rows ?? []) as unknown as CampaignData[]).filter((row) => row.creator_id !== userId && !completed.has(row.id) && row.feedback_completed < row.feedback_target);
+    const allCampaigns = (rows ?? []) as unknown as CampaignData[];
+    const available = allCampaigns.filter((row) => row.status === 'active' && row.creator_id !== userId && !completed.has(row.id) && row.feedback_completed < row.feedback_target);
+    if (viewer?.is_admin) setAdminCampaigns(allCampaigns);
     setCampaigns(available);
     setSelectedCampaign((current) => current && available.some((item) => item.id === current.id) ? current : available[0] ?? null);
     setReceivedCount((receivedRows ?? []).length);
@@ -135,6 +143,20 @@ export default function HomePage() {
     const { error } = await supabase.from('profiles').update(profileDraft).eq('id', user?.id);
     if (error) { setNotice('Não foi possível guardar o perfil. Verifique o link do TikTok.'); return; }
     setProfile(profileDraft); setProfileEditing(false); setNotice('Perfil atualizado.');
+  }
+
+  async function saveAdminCampaign(event: FormEvent<HTMLFormElement>, campaignId: string) {
+    event.preventDefault();
+    const supabase = createBrowserSupabaseClient();
+    const { error } = await supabase.rpc('admin_update_campaign', { p_campaign_id: campaignId, p_title: adminDraft.title, p_prompt: adminDraft.prompt, p_niche: adminDraft.niche, p_status: adminDraft.status, p_feedback_target: adminDraft.feedback_target });
+    if (error) { setNotice('Não foi possível guardar a campanha.'); return; }
+    setAdminEditingId(null); setNotice('Campanha atualizada.');
+    if (user) await loadCommunityData(user.id);
+  }
+
+  function editAdminCampaign(item: CampaignData) {
+    setAdminEditingId(item.id);
+    setAdminDraft({ title: item.title || '', prompt: item.prompt, niche: item.niche || '', status: item.status || 'active', feedback_target: item.feedback_target });
   }
 
   async function uploadProfileImage(event: ChangeEvent<HTMLInputElement>, kind: 'avatar' | 'screenshot') {
@@ -244,6 +266,17 @@ export default function HomePage() {
               <button className="secondary-action" type="button" onClick={() => setProfileEditing(false)}>Cancelar</button>
             </form> : <button className="secondary-action edit-profile" onClick={() => { setProfileDraft(profile); setProfileEditing(true); }}>Editar perfil</button>}
             <div className="stats"><div><b>{points}</b><span>PONTOS</span></div><div><b>{receivedCount}</b><span>RECEBIDOS</span></div><div><b>{sentCount}</b><span>ENVIADAS</span></div></div>
+            {profile.is_admin && <section className="admin-panel" aria-labelledby="admin-title">
+              <div className="admin-panel-head"><span>ADMINISTRAÇÃO</span><h2 id="admin-title">Campanhas reais</h2><p>Edite a missão principal e acompanhe todas as campanhas publicadas.</p></div>
+              {adminCampaigns.length === 0 ? <p className="empty-state">Ainda não existem campanhas para administrar.</p> : adminCampaigns.map((item) => adminEditingId === item.id ? <form className="profile-form admin-edit-form" key={item.id} onSubmit={(event) => void saveAdminCampaign(event, item.id)}>
+                <strong>{item.kind === 'tutorial' ? 'MISSÃO PRINCIPAL' : 'CAMPANHA'}</strong>
+                <label>Título<input value={adminDraft.title} onChange={(event) => setAdminDraft({ ...adminDraft, title: event.target.value })} maxLength={120} required /></label>
+                <label>Pergunta<textarea value={adminDraft.prompt} onChange={(event) => setAdminDraft({ ...adminDraft, prompt: event.target.value })} minLength={12} maxLength={220} required /></label>
+                <label>Nicho<input value={adminDraft.niche} onChange={(event) => setAdminDraft({ ...adminDraft, niche: event.target.value })} maxLength={80} /></label>
+                <label>Estado<select value={adminDraft.status} onChange={(event) => setAdminDraft({ ...adminDraft, status: event.target.value })}><option value="active">Ativa</option><option value="paused">Pausada</option><option value="expired">Expirada</option></select></label>
+                <div className="admin-actions"><button className="primary-action" type="submit">Guardar</button><button className="secondary-action" type="button" onClick={() => setAdminEditingId(null)}>Cancelar</button></div>
+              </form> : <div className="admin-campaign-row" key={item.id}><div><span>{item.kind === 'tutorial' ? 'MISSÃO PRINCIPAL' : item.kind.toUpperCase()} · {item.status}</span><b>{item.title || item.prompt}</b><small>{item.feedback_completed}/{item.feedback_target} feedbacks</small></div><button className="secondary-action" onClick={() => editAdminCampaign(item)}>Editar</button></div>)}
+            </section>}
             <button className="secondary-action" onClick={async () => { const supabase = createBrowserSupabaseClient(); await supabase.auth.signOut(); }}>Sair da conta</button>
           </section>
         )}
