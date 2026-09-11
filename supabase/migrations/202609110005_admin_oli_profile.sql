@@ -5,7 +5,8 @@ set is_admin = true,
     username = 'olipelomundo',
     tiktok_profile_url = 'https://www.tiktok.com/@olipelomundo',
     niche = 'VIAGENS',
-    bio = 'Dicas de viagens, cafés e experiências pelo mundo.'
+    bio = 'Dicas de viagens, cafés e experiências pelo mundo.',
+    tutorial_completed_at = coalesce(p.tutorial_completed_at, now())
 from auth.users u
 where p.id = u.id and lower(u.email) = 'developer.yuregabriel@gmail.com';
 

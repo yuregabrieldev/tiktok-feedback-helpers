@@ -44,7 +44,7 @@ export default function HomePage() {
           supabase.from('profiles').select('display_name,username,tiktok_profile_url,niche,bio,avatar_path,tiktok_screenshot_path,tutorial_completed_at,is_admin').eq('id', data.session.user.id).maybeSingle(),
           supabase.rpc('current_points'),
         ]);
-        if (profileRow) { setProfile(profileRow as ProfileData); setProfileDraft(profileRow as ProfileData); setView((profileRow as ProfileData).tutorial_completed_at ? 'feed' : 'tutorial'); }
+        if (profileRow) { setProfile(profileRow as ProfileData); setProfileDraft(profileRow as ProfileData); const loadedProfile = profileRow as ProfileData; setView(loadedProfile.is_admin || loadedProfile.tutorial_completed_at ? 'feed' : 'tutorial'); }
         if (typeof pointTotal === 'number') setPoints(pointTotal);
         await loadCommunityData(data.session.user.id);
       }
