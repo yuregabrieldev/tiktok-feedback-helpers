@@ -9,6 +9,12 @@ set is_admin = true,
 from auth.users u
 where p.id = u.id and lower(u.email) = 'developer.yuregabriel@gmail.com';
 
+insert into public.campaigns (creator_id, kind, status, title, prompt, niche, feedback_target, reward_per_feedback, reserved_points)
+select p.id, 'tutorial', 'active', 'Missão de acesso PULSO', 'A bio deixa claro o que este perfil oferece?', 'VIAGENS', 10, 0, 0
+from public.profiles p
+where p.is_admin = true and p.username = 'olipelomundo'
+  and not exists (select 1 from public.campaigns c where c.kind = 'tutorial' and c.creator_id = p.id and c.status = 'active');
+
 -- Admin-only profile editing path (normal users remain restricted to their own profile).
 create or replace function public.admin_update_profile(
   p_profile_id uuid,
