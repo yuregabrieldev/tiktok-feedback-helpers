@@ -172,10 +172,20 @@ function AuthScreen() {
   const [step, setStep] = useState<'email' | 'code'>('email');
   const [status, setStatus] = useState('');
   const [sending, setSending] = useState(false);
+  const [resendIn, setResendIn] = useState(0);
 
-  async function requestAccess(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!hasSupabaseConfig) return;
+  useEffect(() => {
+    if (resendIn <= 0) return;
+    const timer = window.setInterval(() => setResendIn((value) => Math.max(0, value - 1)), 1000);
+    return () => window.clearInterval(timer);
+  }, [resendIn]);
+
+  useEffect(() => {
+    if (step === 'code' && code.length === 6 && !sending) void verifyCode();
+  }, [code, step]);
+
+  async function sendCode() {
+    if (!hasSupabaseConfig || !email.trim()) return;
     setSending(true);
     setStatus('');
     const response = await fetch('/api/auth/otp/send', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: email.trim() }) });
@@ -185,12 +195,18 @@ function AuthScreen() {
       setStatus(result.error === 'cooldown' ? 'Aguarde 60 segundos antes de pedir outro código.' : 'Não foi possível enviar o código. Tente novamente dentro de instantes.');
       return;
     }
+    setCode('');
     setStep('code');
+    setResendIn(60);
     setStatus(`Enviámos um código de 6 dígitos para ${email.trim()}.`);
   }
 
-  async function verifyCode(event: FormEvent<HTMLFormElement>) {
+  async function requestAccess(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    await sendCode();
+  }
+
+  async function verifyCode() {
     if (!hasSupabaseConfig || !/^\d{6}$/.test(code)) {
       setStatus('Insira os 6 números recebidos no e-mail.');
       return;
@@ -213,10 +229,11 @@ function AuthScreen() {
         <label htmlFor="email">O seu e-mail</label>
         <input id="email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="voce@email.com" autoComplete="email" required />
         <button className="primary-action" type="submit" disabled={sending}>{sending ? 'A enviar…' : 'Receber código de acesso'}</button>
-      </form> : <form onSubmit={verifyCode}>
+      </form> : <form onSubmit={(event) => { event.preventDefault(); void verifyCode(); }}>
         <label htmlFor="access-code">Código de 6 dígitos</label>
         <input id="access-code" type="text" value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, '').slice(0, 6))} inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} placeholder="000000" required />
         <button className="primary-action" type="submit" disabled={sending}>{sending ? 'A verificar…' : 'Entrar no PULSO'}</button>
+        <button className="secondary-action" type="button" onClick={() => void sendCode()} disabled={sending || resendIn > 0}>{resendIn > 0 ? `Reenviar código em 00:${String(resendIn).padStart(2, '0')}` : 'Reenviar código'}</button>
         <button className="secondary-action" type="button" onClick={() => { setCode(''); setStep('email'); setStatus(''); }} disabled={sending}>Alterar e-mail</button>
       </form>}
       {status && <p className="notice" role="status">{status}</p>}
