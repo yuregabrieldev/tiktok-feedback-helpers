@@ -35,6 +35,7 @@ export default function HomePage() {
   const [sentCount, setSentCount] = useState(0);
   const [adminCampaigns, setAdminCampaigns] = useState<CampaignData[]>([]);
   const [adminEditingId, setAdminEditingId] = useState<string | null>(null);
+  const [adminMissionMedia, setAdminMissionMedia] = useState<{ avatarUrl: string | null; screenshotUrl: string | null }>({ avatarUrl: null, screenshotUrl: null });
   const [adminDraft, setAdminDraft] = useState({ title: '', prompt: '', niche: '', status: 'active', feedback_target: 10, display_name: '', username: '', tiktok_profile_url: '', bio: '' });
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [screenshotUrl, setScreenshotUrl] = useState<string | null>(null);
@@ -250,9 +251,11 @@ export default function HomePage() {
     if (user) await loadCommunityData(user.id);
   }
 
-  function editAdminCampaign(item: CampaignData) {
+  async function editAdminCampaign(item: CampaignData) {
     setAdminEditingId(item.id);
     setAdminDraft({ title: item.title || '', prompt: item.prompt, niche: item.niche || '', status: item.status || 'active', feedback_target: item.feedback_target, display_name: item.campaign_display_name || item.creator?.display_name || '', username: item.campaign_username || item.creator?.username || '', tiktok_profile_url: item.campaign_tiktok_profile_url || item.creator?.tiktok_profile_url || '', bio: item.campaign_bio || item.creator?.bio || '' });
+    const response = await fetch(`/api/profile/media?campaignId=${encodeURIComponent(item.id)}&profileId=${encodeURIComponent(item.creator_id)}`);
+    setAdminMissionMedia(response.ok ? await response.json() : { avatarUrl: null, screenshotUrl: null });
   }
 
   async function uploadProfileImage(event: ChangeEvent<HTMLInputElement>, kind: 'avatar' | 'screenshot', campaignId?: string) {
@@ -378,8 +381,8 @@ export default function HomePage() {
                 <label>@ do TikTok<input value={adminDraft.username} onChange={(event) => setAdminDraft({ ...adminDraft, username: event.target.value.replace(/^@/, '') })} required /></label>
                 <label>Link do perfil<input type="url" value={adminDraft.tiktok_profile_url} onChange={(event) => setAdminDraft({ ...adminDraft, tiktok_profile_url: event.target.value })} required /></label>
                 <label>Bio<textarea value={adminDraft.bio} onChange={(event) => setAdminDraft({ ...adminDraft, bio: event.target.value })} maxLength={220} /></label>
-                <label>Foto do perfil da missão<input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" onChange={(event) => void uploadProfileImage(event, 'avatar', item.id)} /></label>
-                <label>Screenshot do perfil TikTok<input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" onChange={(event) => void uploadProfileImage(event, 'screenshot', item.id)} /></label>
+                <label>Foto do perfil da missão<input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" onChange={(event) => void uploadProfileImage(event, 'avatar', item.id)} />{adminMissionMedia.avatarUrl ? <small className="saved-media"><img src={adminMissionMedia.avatarUrl} alt="Última foto da missão" />Foto salva atualmente</small> : <small>Nenhuma foto salva</small>}</label>
+                <label>Screenshot do perfil TikTok<input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" onChange={(event) => void uploadProfileImage(event, 'screenshot', item.id)} />{adminMissionMedia.screenshotUrl ? <small className="saved-media"><img src={adminMissionMedia.screenshotUrl} alt="Último screenshot da missão" />Screenshot salvo atualmente</small> : <small>Nenhum screenshot salvo</small>}</label>
                 <label>Estado<select value={adminDraft.status} onChange={(event) => setAdminDraft({ ...adminDraft, status: event.target.value })}><option value="active">Ativa</option><option value="paused">Pausada</option><option value="expired">Expirada</option></select></label>
                 <div className="admin-actions"><button className="primary-action" type="submit">Guardar</button><button className="secondary-action" type="button" onClick={() => setAdminEditingId(null)}>Cancelar</button></div>
               </form> : <div className="admin-campaign-row" key={item.id}><div><span>{item.kind === 'tutorial' ? 'MISSÃO PRINCIPAL' : item.kind.toUpperCase()} · {item.status}</span><b>{item.title || item.prompt}</b><small>{item.feedback_completed}/{item.feedback_target} feedbacks</small></div><button className="secondary-action" onClick={() => editAdminCampaign(item)}>Editar</button></div>)}
