@@ -71,7 +71,8 @@ export default function HomePage() {
           supabase.rpc('current_points'),
         ]);
         if (profileRow) { setProfile(profileRow as ProfileData); setProfileDraft(profileRow as ProfileData); const loadedProfile = profileRow as ProfileData; const authHeaders = data.session.access_token ? { Authorization: `Bearer ${data.session.access_token}` } : undefined; navigateTo(loadedProfile.is_admin || loadedProfile.tutorial_completed_at ? 'feed' : 'tutorial', true); if (loadedProfile.avatar_path) void fetch('/api/profile/avatar?kind=avatar', { headers: authHeaders }).then((response) => response.ok ? response.json() : null).then((result) => result?.url && setAvatarUrl(result.url)); if (loadedProfile.tiktok_screenshot_path) void fetch('/api/profile/avatar?kind=screenshot', { headers: authHeaders }).then((response) => response.ok ? response.json() : null).then((result) => result?.url && setScreenshotUrl(result.url)); }
-        if (typeof pointTotal === 'number') setPoints(pointTotal);
+        if (typeof pointTotal === 'number' && !loadedProfile.is_admin) setPoints(pointTotal);
+        if (loadedProfile.is_admin) setPoints(0);
         await loadCommunityData(data.session.user.id);
       }
       setAuthLoading(false);
@@ -167,7 +168,7 @@ export default function HomePage() {
     if (error) { setNotice(error.message.includes('not_eligible') ? 'Aguarde os 15 segundos de análise antes de enviar.' : 'Não foi possível enviar este feedback.'); return; }
     const awarded = result?.[0]?.awarded_points ?? 0;
     const { data: total } = await supabase.rpc('current_points');
-    if (typeof total === 'number') setPoints(total);
+    if (typeof total === 'number' && !profile.is_admin) setPoints(total);
     if (result?.[0]?.tutorial_completed) setProfile((current) => ({ ...current, tutorial_completed_at: new Date().toISOString() }));
     navigateTo('feed');
     setNotice(awarded > 0 ? `Feedback enviado. Ganhou ${awarded} ponto.` : 'Feedback enviado. A sua conta está ativa.');
@@ -261,7 +262,7 @@ export default function HomePage() {
           <strong>PULSO</strong>
           <small>TIKTOK FEEDBACK HELPERS</small>
         </button>
-        <span className="points"><b>{points}</b> PONTO{points === 1 ? '' : 'S'}</span>
+        <span className="points">{profile.is_admin ? <b>ADMIN</b> : <><b>{points}</b> PONTO{points === 1 ? '' : 'S'}</>}</span>
       </header>
 
       <section className="screen" aria-labelledby="screen-title">
@@ -282,7 +283,7 @@ export default function HomePage() {
           <>
             <section className="progress-band" aria-label="Estado atual">
               <span>PRONTO PARA PUBLICAR</span>
-              <b>{points} ponto disponível</b>
+              <b>{profile.is_admin ? 'Conta administrativa' : `${points} ponto${points === 1 ? '' : 's'} disponível${points === 1 ? '' : 'is'}`}</b>
             </section>
             {dataLoading ? <p className="empty-state">A carregar campanhas…</p> : <CampaignCard campaign={selectedCampaign} onAction={() => void beginMission('standard')} />}
             <section className="feed-next" aria-label="Próximas campanhas">
@@ -335,7 +336,7 @@ export default function HomePage() {
               <button className="primary-action" type="submit">Guardar perfil</button>
               <button className="secondary-action" type="button" onClick={() => setProfileEditing(false)}>Cancelar</button>
             </form> : <button className="secondary-action edit-profile" onClick={() => { setProfileDraft(profile); setProfileEditing(true); }}>Editar perfil</button>}
-            <div className="stats"><div><b>{points}</b><span>PONTOS</span></div><div><b>{receivedCount}</b><span>RECEBIDOS</span></div><div><b>{sentCount}</b><span>ENVIADAS</span></div></div>
+            <div className="stats"><div><b>{profile.is_admin ? '—' : points}</b><span>{profile.is_admin ? 'ADMIN' : 'PONTOS'}</span></div><div><b>{receivedCount}</b><span>RECEBIDOS</span></div><div><b>{sentCount}</b><span>ENVIADAS</span></div></div>
             {profile.is_admin && <section className="admin-panel" aria-labelledby="admin-title">
               <div className="admin-panel-head"><span>ADMINISTRAÇÃO</span><h2 id="admin-title">Campanhas reais</h2><p>Edite a missão principal e acompanhe todas as campanhas publicadas.</p></div>
               {adminCampaigns.length === 0 ? <p className="empty-state">Ainda não existem campanhas para administrar.</p> : adminCampaigns.map((item) => adminEditingId === item.id ? <form className="profile-form admin-edit-form" key={item.id} onSubmit={(event) => void saveAdminCampaign(event, item.id)}>
