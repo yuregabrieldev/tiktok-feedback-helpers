@@ -99,7 +99,7 @@ export default function HomePage() {
     ]);
     const completed = new Set((feedbackRows ?? []).map((row: { campaign_id: string }) => row.campaign_id));
     const allCampaigns = (rows ?? []) as unknown as CampaignData[];
-    const available = viewer?.is_admin ? allCampaigns : allCampaigns.filter((row) => row.status === 'active' && row.creator_id !== userId && !completed.has(row.id) && row.feedback_completed < row.feedback_target);
+    const available = viewer?.is_admin ? allCampaigns.filter((row) => row.status !== 'removed') : allCampaigns.filter((row) => row.status === 'active' && row.creator_id !== userId && !completed.has(row.id) && row.feedback_completed < row.feedback_target);
     if (viewer?.is_admin) setAdminCampaigns(allCampaigns);
     const withMedia = await Promise.all(available.map(async (item) => {
       if (!item.creator_id) return item;
