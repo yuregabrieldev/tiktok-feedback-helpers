@@ -64,7 +64,8 @@ export default function HomePage() {
     const supabase = createBrowserSupabaseClient();
     const { data: sessionState } = await supabase.auth.getSession();
     const authHeaders = sessionState.session?.access_token ? { Authorization: `Bearer ${sessionState.session.access_token}` } : undefined;
-    const { data: viewer } = await supabase.from('profiles').select('is_admin').eq('id', userId).maybeSingle();
+    const { data: viewerRow } = await supabase.from('profiles').select('is_admin').eq('id', userId).maybeSingle();
+    const viewer = viewerRow as { is_admin?: boolean } | null;
     let campaignQuery = supabase.from('campaigns').select('id,kind,status,niche,prompt,title,creator_id,feedback_completed,feedback_target,creator:profiles!campaigns_creator_id_fkey(display_name,username,tiktok_profile_url,niche,bio)').order('created_at', { ascending: false });
     if (!viewer?.is_admin) campaignQuery = campaignQuery.eq('status', 'active');
     const [{ data: rows }, { data: feedbackRows }, { data: receivedRows }, { data: sentRows }] = await Promise.all([
@@ -87,7 +88,8 @@ export default function HomePage() {
     setSelectedCampaign((current) => current && withMedia.some((item) => item.id === current.id) ? current : withMedia[0] ?? null);
     setReceivedCount((receivedRows ?? []).length);
     setSentCount((sentRows ?? []).length);
-    const { data: openMission } = await supabase.from('missions').select('id,campaign_id,status,campaigns!inner(id,kind,status,niche,prompt,title,creator_id,feedback_completed,feedback_target,creator:profiles!campaigns_creator_id_fkey(display_name,username,tiktok_profile_url,niche,bio))').eq('evaluator_id', userId).in('status', ['started', 'ready_for_feedback']).maybeSingle();
+    const { data: openMissionRow } = await supabase.from('missions').select('id,campaign_id,status,campaigns!inner(id,kind,status,niche,prompt,title,creator_id,feedback_completed,feedback_target,creator:profiles!campaigns_creator_id_fkey(display_name,username,tiktok_profile_url,niche,bio))').eq('evaluator_id', userId).in('status', ['started', 'ready_for_feedback']).maybeSingle();
+    const openMission = openMissionRow as { id: string; campaigns: CampaignData } | null;
     if (openMission?.id) {
       const missionCampaign = openMission.campaigns as unknown as CampaignData;
       setMissionId(openMission.id); setActiveMission(true); setSelectedCampaign(missionCampaign); setMissionKind(missionCampaign.kind === 'tutorial' ? 'tutorial' : 'standard'); setView('evaluate');
