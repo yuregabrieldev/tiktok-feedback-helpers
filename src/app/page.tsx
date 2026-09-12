@@ -92,6 +92,16 @@ export default function HomePage() {
     const openMission = openMissionRow as { id: string; campaigns: CampaignData } | null;
     if (openMission?.id) {
       const missionCampaign = openMission.campaigns as unknown as CampaignData;
+      // The open-mission query is intentionally small and does not include
+      // private media paths. Resolve the creator media again before restoring
+      // the evaluation screen after returning from TikTok.
+      if (missionCampaign.creator_id) {
+        const mediaResponse = await fetch(`/api/profile/media?profileId=${encodeURIComponent(missionCampaign.creator_id)}`, { headers: authHeaders });
+        const media = mediaResponse.ok ? await mediaResponse.json() : {};
+        if (missionCampaign.creator) {
+          missionCampaign.creator = { ...missionCampaign.creator, avatarUrl: media.avatarUrl ?? null, screenshotUrl: media.screenshotUrl ?? null };
+        }
+      }
       setMissionId(openMission.id); setActiveMission(true); setSelectedCampaign(missionCampaign); setMissionKind(missionCampaign.kind === 'tutorial' ? 'tutorial' : 'standard'); setView('evaluate');
     }
     setDataLoading(false);
