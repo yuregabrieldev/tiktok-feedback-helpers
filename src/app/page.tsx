@@ -33,6 +33,8 @@ export default function HomePage() {
   const [adminCampaigns, setAdminCampaigns] = useState<CampaignData[]>([]);
   const [adminEditingId, setAdminEditingId] = useState<string | null>(null);
   const [adminDraft, setAdminDraft] = useState({ title: '', prompt: '', niche: '', status: 'active', feedback_target: 10 });
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [screenshotUrl, setScreenshotUrl] = useState<string | null>(null);
 
   useEffect(() => {
     if (!hasSupabaseConfig) {
@@ -47,7 +49,7 @@ export default function HomePage() {
           supabase.from('profiles').select('display_name,username,tiktok_profile_url,niche,bio,avatar_path,tiktok_screenshot_path,tutorial_completed_at,is_admin').eq('id', data.session.user.id).maybeSingle(),
           supabase.rpc('current_points'),
         ]);
-        if (profileRow) { setProfile(profileRow as ProfileData); setProfileDraft(profileRow as ProfileData); const loadedProfile = profileRow as ProfileData; setView(loadedProfile.is_admin || loadedProfile.tutorial_completed_at ? 'feed' : 'tutorial'); }
+        if (profileRow) { setProfile(profileRow as ProfileData); setProfileDraft(profileRow as ProfileData); const loadedProfile = profileRow as ProfileData; setView(loadedProfile.is_admin || loadedProfile.tutorial_completed_at ? 'feed' : 'tutorial'); if (loadedProfile.avatar_path) void fetch('/api/profile/avatar?kind=avatar').then((response) => response.ok ? response.json() : null).then((result) => result?.url && setAvatarUrl(result.url)); if (loadedProfile.tiktok_screenshot_path) void fetch('/api/profile/avatar?kind=screenshot').then((response) => response.ok ? response.json() : null).then((result) => result?.url && setScreenshotUrl(result.url)); }
         if (typeof pointTotal === 'number') setPoints(pointTotal);
         await loadCommunityData(data.session.user.id);
       }
@@ -165,6 +167,7 @@ export default function HomePage() {
     const response = await fetch('/api/profile/avatar', { method: 'POST', body });
     const result = await response.json().catch(() => ({}));
     if (!response.ok) { setNotice(result.error || 'Não foi possível processar a imagem.'); return; }
+    if (kind === 'avatar') setAvatarUrl(result.url ?? null); else setScreenshotUrl(result.url ?? null);
     setProfile((current) => ({ ...current, ...(kind === 'avatar' ? { avatar_path: result.path } : { tiktok_screenshot_path: result.path }) }));
     setProfileDraft((current) => ({ ...current, ...(kind === 'avatar' ? { avatar_path: result.path } : { tiktok_screenshot_path: result.path }) }));
     setNotice(kind === 'avatar' ? 'Foto de perfil atualizada.' : 'Screenshot do TikTok atualizada.');
@@ -254,7 +257,7 @@ export default function HomePage() {
 
         {view === 'profile' && (
           <section className="account-card">
-            <div className="account-head"><div className="avatar-edit-wrap"><Avatar initials={(profile.display_name || 'Y').slice(0, 1).toUpperCase()} large />{profileEditing && <label className="avatar-edit" title="Alterar foto de perfil"><span aria-hidden="true">✎</span><input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" onChange={(event) => void uploadProfileImage(event, 'avatar')} /></label>}</div><div><span>O SEU PERFIL</span><h2>{profile.username ? `@${profile.username.replace(/^@/, '')}` : '@o_seu_tiktok'}</h2><p>{profile.tiktok_profile_url || 'Adicione o seu link do TikTok para começar.'}</p></div></div>
+            <div className="account-head"><div className="avatar-edit-wrap"><Avatar initials={(profile.display_name || 'Y').slice(0, 1).toUpperCase()} src={avatarUrl} large />{profileEditing && <label className="avatar-edit" title="Alterar foto de perfil"><span aria-hidden="true">✎</span><input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" onChange={(event) => void uploadProfileImage(event, 'avatar')} /></label>}</div><div><span>O SEU PERFIL</span><h2>{profile.username ? `@${profile.username.replace(/^@/, '')}` : '@o_seu_tiktok'}</h2><p>{profile.tiktok_profile_url || 'Adicione o seu link do TikTok para começar.'}</p></div></div>
             {profileEditing ? <form className="profile-form" onSubmit={saveProfile}>
               <label htmlFor="profile-name">Nome<input id="profile-name" value={profileDraft.display_name} onChange={(event) => setProfileDraft({ ...profileDraft, display_name: event.target.value })} /></label>
               <label htmlFor="profile-username">@ do TikTok<input id="profile-username" value={profileDraft.username} onChange={(event) => setProfileDraft({ ...profileDraft, username: event.target.value.replace(/^@/, '') })} placeholder="o_seu_tiktok" required /></label>
@@ -392,8 +395,8 @@ function CampaignCard({ campaign, admin = false, onAction }: { campaign: Campaig
   </article>;
 }
 
-function Avatar({ initials, large = false }: { initials: string; large?: boolean }) {
-  return <span className={large ? 'avatar avatar-large' : 'avatar'} aria-hidden="true">{initials}</span>;
+function Avatar({ initials, src, large = false }: { initials: string; src?: string | null; large?: boolean }) {
+  return <span className={large ? 'avatar avatar-large' : 'avatar'} aria-hidden="true">{src ? <img src={src} alt="" /> : initials}</span>;
 }
 
 function Icon({ name }: { name: 'home' | 'plus' | 'user' }) {

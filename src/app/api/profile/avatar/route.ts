@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import sharp from 'sharp';
+import { createClient } from '@supabase/supabase-js';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
@@ -10,10 +11,33 @@ const maxSourceBytes = 8 * 1024 * 1024;
 const minDimension = 160;
 const maxDimension = 4096;
 
+async function getUser(request: Request) {
+  const server = await createServerSupabaseClient();
+  const fromCookie = await server.auth.getUser();
+  if (fromCookie.data.user) return fromCookie.data.user;
+  const token = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '');
+  if (!token) return null;
+  const direct = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!, { auth: { persistSession: false } });
+  const result = await direct.auth.getUser(token);
+  return result.data.user;
+}
+
+export async function GET(request: Request) {
+  const user = await getUser(request);
+  if (!user) return NextResponse.json({ error: 'Sessão expirada. Entre novamente.' }, { status: 401 });
+  const kind = new URL(request.url).searchParams.get('kind') === 'screenshot' ? 'screenshot' : 'avatar';
+  const admin = createAdminSupabaseClient();
+  const { data: profile } = await admin.from('profiles').select('avatar_path,tiktok_screenshot_path').eq('id', user.id).maybeSingle();
+  const path = kind === 'screenshot' ? profile?.tiktok_screenshot_path : profile?.avatar_path;
+  if (!path) return NextResponse.json({ url: null });
+  const { data, error } = await admin.storage.from('avatars-clean').createSignedUrl(path, 3600);
+  if (error) return NextResponse.json({ error: 'Imagem indisponível.' }, { status: 404 });
+  return NextResponse.json({ url: data.signedUrl });
+}
+
 export async function POST(request: Request) {
-  const supabase = await createServerSupabaseClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: 'Não autenticado.' }, { status: 401 });
+  const user = await getUser(request);
+  if (!user) return NextResponse.json({ error: 'Sessão expirada. Entre novamente.' }, { status: 401 });
 
   const formData = await request.formData();
   const upload = formData.get('file');
@@ -62,7 +86,8 @@ export async function POST(request: Request) {
     const { error: profileError } = await admin.from('profiles').update(kind === 'screenshot' ? { tiktok_screenshot_path: filePath } : { avatar_path: filePath }).eq('id', user.id);
     if (profileError) throw profileError;
 
-    return NextResponse.json({ path: filePath });
+    const { data: signed } = await admin.storage.from('avatars-clean').createSignedUrl(filePath, 3600);
+    return NextResponse.json({ path: filePath, url: signed?.signedUrl ?? null });
   } catch {
     return NextResponse.json({ error: 'Não foi possível processar esta imagem.' }, { status: 400 });
   }
