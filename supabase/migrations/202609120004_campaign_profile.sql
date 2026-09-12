@@ -2,6 +2,8 @@ alter table public.campaigns add column if not exists campaign_display_name text
 alter table public.campaigns add column if not exists campaign_username text;
 alter table public.campaigns add column if not exists campaign_tiktok_profile_url text;
 alter table public.campaigns add column if not exists campaign_bio text;
+alter table public.campaigns add column if not exists campaign_avatar_path text;
+alter table public.campaigns add column if not exists campaign_screenshot_path text;
 
 create or replace function public.admin_update_campaign_profile(p_campaign_id uuid, p_display_name text, p_username text, p_tiktok_profile_url text, p_bio text)
 returns void language plpgsql security definer set search_path = '' as $$

@@ -18,13 +18,19 @@ export async function GET(request: Request) {
   }
   if (!user) return NextResponse.json({ error: 'Sessão expirada. Entre novamente.' }, { status: 401 });
   const profileId = new URL(request.url).searchParams.get('profileId');
-  if (!profileId) return NextResponse.json({ error: 'Perfil não informado.' }, { status: 400 });
+  const campaignId = new URL(request.url).searchParams.get('campaignId');
+  if (!profileId && !campaignId) return NextResponse.json({ error: 'Perfil não informado.' }, { status: 400 });
   const admin = createAdminSupabaseClient();
-  const { data: profile } = await admin.from('profiles').select('avatar_path,tiktok_screenshot_path').eq('id', profileId).maybeSingle();
+  const { data: profile } = campaignId
+    ? await admin.from('campaigns').select('campaign_avatar_path,campaign_screenshot_path,creator:profiles!campaigns_creator_id_fkey(avatar_path,tiktok_screenshot_path)').eq('id', campaignId).maybeSingle()
+    : await admin.from('profiles').select('avatar_path,tiktok_screenshot_path').eq('id', profileId).maybeSingle();
   if (!profile) return NextResponse.json({ error: 'Perfil não encontrado.' }, { status: 404 });
+  const creator = (profile as { creator?: { avatar_path?: string | null; tiktok_screenshot_path?: string | null } | null }).creator;
+  const avatarPath = (profile as { campaign_avatar_path?: string | null; avatar_path?: string | null }).campaign_avatar_path || creator?.avatar_path || (profile as { avatar_path?: string | null }).avatar_path;
+  const screenshotPath = (profile as { campaign_screenshot_path?: string | null; tiktok_screenshot_path?: string | null }).campaign_screenshot_path || creator?.tiktok_screenshot_path || (profile as { tiktok_screenshot_path?: string | null }).tiktok_screenshot_path;
   const [avatar, screenshot] = await Promise.all([
-    profile.avatar_path ? admin.storage.from('avatars-clean').createSignedUrl(profile.avatar_path, 3600) : Promise.resolve({ data: null }),
-    profile.tiktok_screenshot_path ? admin.storage.from('avatars-clean').createSignedUrl(profile.tiktok_screenshot_path, 3600) : Promise.resolve({ data: null }),
+    avatarPath ? admin.storage.from('avatars-clean').createSignedUrl(avatarPath, 3600) : Promise.resolve({ data: null }),
+    screenshotPath ? admin.storage.from('avatars-clean').createSignedUrl(screenshotPath, 3600) : Promise.resolve({ data: null }),
   ]);
   return NextResponse.json({ avatarUrl: avatar.data?.signedUrl ?? null, screenshotUrl: screenshot.data?.signedUrl ?? null });
 }

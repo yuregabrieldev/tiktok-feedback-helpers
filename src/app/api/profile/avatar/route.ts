@@ -42,6 +42,7 @@ export async function POST(request: Request) {
   const formData = await request.formData();
   const upload = formData.get('file');
   const kind = formData.get('kind') === 'screenshot' ? 'screenshot' : 'avatar';
+  const campaignId = typeof formData.get('campaignId') === 'string' ? String(formData.get('campaignId')) : null;
   if (!(upload instanceof File)) return NextResponse.json({ error: 'Envie uma imagem.' }, { status: 400 });
   if (upload.size === 0 || upload.size > maxSourceBytes) return NextResponse.json({ error: 'A imagem deve ter até 8 MB.' }, { status: 400 });
 
@@ -75,7 +76,7 @@ export async function POST(request: Request) {
       if (!result?.allowed) return NextResponse.json({ error: 'Não foi possível usar esta imagem.' }, { status: 400 });
     }
     const admin = createAdminSupabaseClient();
-    const filePath = `${user.id}/${kind}-${crypto.randomUUID()}.webp`;
+    const filePath = `${campaignId ? `campaigns/${campaignId}` : user.id}/${kind}-${crypto.randomUUID()}.webp`;
     const { error: uploadError } = await admin.storage.from('avatars-clean').upload(filePath, safeImage, {
       contentType: 'image/webp',
       upsert: false,
@@ -83,7 +84,9 @@ export async function POST(request: Request) {
     });
     if (uploadError) throw uploadError;
 
-    const { error: profileError } = await admin.from('profiles').update(kind === 'screenshot' ? { tiktok_screenshot_path: filePath } : { avatar_path: filePath }).eq('id', user.id);
+    const { error: profileError } = campaignId
+      ? await admin.from('campaigns').update(kind === 'screenshot' ? { campaign_screenshot_path: filePath } : { campaign_avatar_path: filePath }).eq('id', campaignId)
+      : await admin.from('profiles').update(kind === 'screenshot' ? { tiktok_screenshot_path: filePath } : { avatar_path: filePath }).eq('id', user.id);
     if (profileError) throw profileError;
 
     const { data: signed } = await admin.storage.from('avatars-clean').createSignedUrl(filePath, 3600);

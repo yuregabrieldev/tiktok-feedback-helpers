@@ -7,7 +7,7 @@ import { createBrowserSupabaseClient, hasSupabaseConfig } from '@/lib/supabase/b
 type View = 'tutorial' | 'feed' | 'evaluate' | 'publish' | 'profile';
 type MissionKind = 'tutorial' | 'standard';
 type ProfileData = { display_name: string; username: string; tiktok_profile_url: string | null; niche: string; bio: string; avatar_path?: string | null; tiktok_screenshot_path?: string | null; tutorial_completed_at?: string | null; is_admin?: boolean };
-type CampaignData = { id: string; kind: 'normal' | 'seed' | 'featured' | 'tutorial'; status?: string; niche: string | null; prompt: string; title: string; creator_id: string; campaign_display_name?: string | null; campaign_username?: string | null; campaign_tiktok_profile_url?: string | null; campaign_bio?: string | null; creator: { display_name: string; username: string; tiktok_profile_url: string | null; niche: string | null; bio: string; avatarUrl?: string | null; screenshotUrl?: string | null } | null; feedback_completed: number; feedback_target: number };
+type CampaignData = { id: string; kind: 'normal' | 'seed' | 'featured' | 'tutorial'; status?: string; niche: string | null; prompt: string; title: string; creator_id: string; campaign_display_name?: string | null; campaign_username?: string | null; campaign_tiktok_profile_url?: string | null; campaign_bio?: string | null; campaign_avatar_path?: string | null; campaign_screenshot_path?: string | null; creator: { display_name: string; username: string; tiktok_profile_url: string | null; niche: string | null; bio: string; avatarUrl?: string | null; screenshotUrl?: string | null } | null; feedback_completed: number; feedback_target: number };
 
 const viewPaths: Record<View, string> = { tutorial: '/primeira-missao', feed: '/for-you', evaluate: '/avaliar', publish: '/publicar', profile: '/conta' };
 const pathViews: Record<string, View> = Object.fromEntries(Object.entries(viewPaths).map(([view, path]) => [path, view as View]));
@@ -115,7 +115,7 @@ export default function HomePage() {
     if (viewer?.is_admin) setAdminCampaigns(allCampaigns.filter((row) => row.kind === 'tutorial' || row.kind === 'featured'));
     const withMedia = await Promise.all(available.map(async (item) => {
       if (!item.creator_id) return item;
-      const mediaResponse = await fetch(`/api/profile/media?profileId=${encodeURIComponent(item.creator_id)}`, { headers: authHeaders });
+      const mediaResponse = await fetch(`/api/profile/media?campaignId=${encodeURIComponent(item.id)}&profileId=${encodeURIComponent(item.creator_id)}`, { headers: authHeaders });
       const media = mediaResponse.ok ? await mediaResponse.json() : {};
       return { ...item, creator: item.creator ? { ...item.creator, display_name: item.campaign_display_name || item.creator.display_name, username: item.campaign_username || item.creator.username, tiktok_profile_url: item.campaign_tiktok_profile_url || item.creator.tiktok_profile_url, bio: item.campaign_bio || item.creator.bio, avatarUrl: media.avatarUrl, screenshotUrl: media.screenshotUrl } : item.creator };
     }));
@@ -255,14 +255,16 @@ export default function HomePage() {
     setAdminDraft({ title: item.title || '', prompt: item.prompt, niche: item.niche || '', status: item.status || 'active', feedback_target: item.feedback_target, display_name: item.campaign_display_name || item.creator?.display_name || '', username: item.campaign_username || item.creator?.username || '', tiktok_profile_url: item.campaign_tiktok_profile_url || item.creator?.tiktok_profile_url || '', bio: item.campaign_bio || item.creator?.bio || '' });
   }
 
-  async function uploadProfileImage(event: ChangeEvent<HTMLInputElement>, kind: 'avatar' | 'screenshot') {
+  async function uploadProfileImage(event: ChangeEvent<HTMLInputElement>, kind: 'avatar' | 'screenshot', campaignId?: string) {
     const file = event.target.files?.[0]; if (!file) return;
     const body = new FormData(); body.set('file', file); body.set('kind', kind);
+    if (campaignId) body.set('campaignId', campaignId);
     const browser = createBrowserSupabaseClient();
     const { data: sessionState } = await browser.auth.getSession();
     const response = await fetch('/api/profile/avatar', { method: 'POST', headers: sessionState.session?.access_token ? { Authorization: `Bearer ${sessionState.session.access_token}` } : undefined, body });
     const result = await response.json().catch(() => ({}));
     if (!response.ok) { setNotice(result.error || 'Não foi possível processar a imagem.'); return; }
+    if (campaignId) { setNotice(kind === 'avatar' ? 'Foto da missão atualizada.' : 'Screenshot da missão atualizado.'); return; }
     if (kind === 'avatar') setAvatarUrl(result.url ?? null); else setScreenshotUrl(result.url ?? null);
     setProfile((current) => ({ ...current, ...(kind === 'avatar' ? { avatar_path: result.path } : { tiktok_screenshot_path: result.path }) }));
     setProfileDraft((current) => ({ ...current, ...(kind === 'avatar' ? { avatar_path: result.path } : { tiktok_screenshot_path: result.path }) }));
@@ -376,6 +378,8 @@ export default function HomePage() {
                 <label>@ do TikTok<input value={adminDraft.username} onChange={(event) => setAdminDraft({ ...adminDraft, username: event.target.value.replace(/^@/, '') })} required /></label>
                 <label>Link do perfil<input type="url" value={adminDraft.tiktok_profile_url} onChange={(event) => setAdminDraft({ ...adminDraft, tiktok_profile_url: event.target.value })} required /></label>
                 <label>Bio<textarea value={adminDraft.bio} onChange={(event) => setAdminDraft({ ...adminDraft, bio: event.target.value })} maxLength={220} /></label>
+                <label>Foto do perfil da missão<input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" onChange={(event) => void uploadProfileImage(event, 'avatar', item.id)} /></label>
+                <label>Screenshot do perfil TikTok<input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" onChange={(event) => void uploadProfileImage(event, 'screenshot', item.id)} /></label>
                 <label>Estado<select value={adminDraft.status} onChange={(event) => setAdminDraft({ ...adminDraft, status: event.target.value })}><option value="active">Ativa</option><option value="paused">Pausada</option><option value="expired">Expirada</option></select></label>
                 <div className="admin-actions"><button className="primary-action" type="submit">Guardar</button><button className="secondary-action" type="button" onClick={() => setAdminEditingId(null)}>Cancelar</button></div>
               </form> : <div className="admin-campaign-row" key={item.id}><div><span>{item.kind === 'tutorial' ? 'MISSÃO PRINCIPAL' : item.kind.toUpperCase()} · {item.status}</span><b>{item.title || item.prompt}</b><small>{item.feedback_completed}/{item.feedback_target} feedbacks</small></div><button className="secondary-action" onClick={() => editAdminCampaign(item)}>Editar</button></div>)}
