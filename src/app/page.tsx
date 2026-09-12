@@ -99,7 +99,7 @@ export default function HomePage() {
     ]);
     const completed = new Set((feedbackRows ?? []).map((row: { campaign_id: string }) => row.campaign_id));
     const allCampaigns = (rows ?? []) as unknown as CampaignData[];
-    const available = allCampaigns.filter((row) => row.status === 'active' && row.creator_id !== userId && !completed.has(row.id) && row.feedback_completed < row.feedback_target);
+    const available = viewer?.is_admin ? allCampaigns : allCampaigns.filter((row) => row.status === 'active' && row.creator_id !== userId && !completed.has(row.id) && row.feedback_completed < row.feedback_target);
     if (viewer?.is_admin) setAdminCampaigns(allCampaigns);
     const withMedia = await Promise.all(available.map(async (item) => {
       if (!item.creator_id) return item;
@@ -223,6 +223,15 @@ export default function HomePage() {
     if (user) await loadCommunityData(user.id);
   }
 
+  async function deleteCampaign(campaignId: string) {
+    if (!profile.is_admin) return;
+    const supabase = createBrowserSupabaseClient();
+    const { error } = await supabase.rpc('admin_delete_campaign', { p_campaign_id: campaignId });
+    if (error) { setNotice('Não foi possível excluir a publicação.'); return; }
+    setNotice('Publicação excluída.');
+    if (user) await loadCommunityData(user.id);
+  }
+
   function editAdminCampaign(item: CampaignData) {
     setAdminEditingId(item.id);
     setAdminDraft({ title: item.title || '', prompt: item.prompt, niche: item.niche || '', status: item.status || 'active', feedback_target: item.feedback_target });
@@ -286,7 +295,7 @@ export default function HomePage() {
               <span>PRONTO PARA PUBLICAR</span>
               <b>{profile.is_admin ? 'Conta administrativa' : `${points} ponto${points === 1 ? '' : 's'} disponível${points === 1 ? '' : 'is'}`}</b>
             </section>
-            {dataLoading ? <p className="empty-state">A carregar campanhas…</p> : <CampaignCard campaign={selectedCampaign} onAction={() => void beginMission('standard')} />}
+            {dataLoading ? <p className="empty-state">A carregar campanhas…</p> : profile.is_admin ? <div className="campaign-list">{campaigns.map((item) => <CampaignCard key={item.id} campaign={item} admin onAction={() => void beginMission('standard', item)} onDelete={() => void deleteCampaign(item.id)} />)}</div> : <CampaignCard campaign={selectedCampaign} onAction={() => void beginMission('standard')} />}
             <section className="feed-next" aria-label="Próximas campanhas">
               <span>PRÓXIMOS PULSOS</span>
               <p>O feed será preenchido com campanhas que ainda não avaliou.</p>
@@ -452,7 +461,7 @@ function Brand() {
   return <div className="brand brand-static"><span className="pulse-mark" aria-hidden="true"><i /><i /><i /></span><strong>PULSO</strong><small>TIKTOK FEEDBACK HELPERS</small></div>;
 }
 
-function CampaignCard({ campaign, admin = false, onAction }: { campaign: CampaignData | null; admin?: boolean; onAction: () => void }) {
+function CampaignCard({ campaign, admin = false, onAction, onDelete }: { campaign: CampaignData | null; admin?: boolean; onAction: () => void; onDelete?: () => void }) {
   if (!campaign) return <section className="empty-state"><b>{admin ? 'Missão de acesso indisponível' : 'Nenhum pulso disponível'}</b><p>Volte em instantes. As campanhas ativas aparecem aqui automaticamente.</p></section>;
   const creator = campaign.creator;
   return <article className="campaign-card">
@@ -461,7 +470,8 @@ function CampaignCard({ campaign, admin = false, onAction }: { campaign: Campaig
     <p className="creator-description">{creator?.bio || 'Peça uma leitura honesta de alguém da comunidade.'}</p>
     {creator?.screenshotUrl && <img className="profile-proof" src={creator.screenshotUrl} alt="Screenshot do perfil TikTok" />}
     <div className="request"><span>PEDIDO DA VEZ</span><p>“{campaign.prompt}”</p></div>
-    <button className="primary-action" onClick={onAction}>Conhecer e avaliar {!admin && <span>+1</span>}</button>
+    {(!admin || campaign.kind === 'tutorial') && <button className="primary-action" onClick={onAction}>Conhecer e avaliar {!admin && <span>+1</span>}</button>}
+    {admin && onDelete && <button className="secondary-action admin-delete" onClick={onDelete}>Excluir publicação</button>}
   </article>;
 }
 
