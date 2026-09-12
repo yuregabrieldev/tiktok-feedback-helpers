@@ -58,6 +58,18 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => {
+    if (!user || !hasSupabaseConfig) return;
+    const supabase = createBrowserSupabaseClient();
+    const refresh = () => void loadCommunityData(user.id);
+    const channel = supabase.channel(`pulso-live-${user.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'campaigns' }, refresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'feedbacks' }, refresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, refresh)
+      .subscribe();
+    return () => { void supabase.removeChannel(channel); };
+  }, [user]);
+
+  useEffect(() => {
     if (!hasSupabaseConfig) {
       setAuthLoading(false);
       return;
