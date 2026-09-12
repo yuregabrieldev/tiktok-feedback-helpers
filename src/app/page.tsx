@@ -18,6 +18,10 @@ function safeTikTokUrl(value: string | null | undefined) {
     return null;
   }
 }
+
+function noticeTone(message: string) {
+  return /\b(não|nao|termine|preciso|aguarde|indisponível|indisponivel|inválid|invalid|erro|verifique|falha|expirad|preencha|atualize|suficientes)\b/i.test(message) ? 'error' : 'success';
+}
 type ProfileData = { display_name: string; username: string; tiktok_profile_url: string | null; niche: string; bio: string; avatar_path?: string | null; tiktok_screenshot_path?: string | null; tutorial_completed_at?: string | null; is_admin?: boolean };
 type CampaignData = { id: string; kind: 'normal' | 'seed' | 'featured' | 'tutorial'; status?: string; niche: string | null; prompt: string; title: string; creator_id: string; campaign_display_name?: string | null; campaign_username?: string | null; campaign_tiktok_profile_url?: string | null; campaign_bio?: string | null; campaign_avatar_path?: string | null; campaign_screenshot_path?: string | null; creator: { display_name: string; username: string; tiktok_profile_url: string | null; niche: string | null; bio: string; avatarUrl?: string | null; screenshotUrl?: string | null } | null; feedback_completed: number; feedback_target: number };
 
@@ -325,7 +329,7 @@ export default function HomePage() {
         <div className="eyebrow"><span className="live-dot" /> {view === 'tutorial' ? 'ACESSO PENDENTE' : 'COMUNIDADE ATIVA'}</div>
         <h1 id="screen-title">{title}</h1>
 
-        {notice && view !== 'publish' && <button className="notice notice-action" role="status" onClick={() => activeMission && navigateTo('evaluate')}>{notice}</button>}
+        {notice && view !== 'publish' && <button className={`notice notice-action ${noticeTone(notice)}`} role="status" onClick={() => activeMission && navigateTo('evaluate')}>{notice}</button>}
 
         {view === 'tutorial' && (
           <>
@@ -504,7 +508,7 @@ function AuthScreen() {
         <button className="secondary-action" type="button" onClick={() => void sendCode()} disabled={sending || resendIn > 0}>{resendIn > 0 ? `Reenviar código em 00:${String(resendIn).padStart(2, '0')}` : 'Reenviar código'}</button>
         <button className="secondary-action" type="button" onClick={() => { setCode(''); setStep('email'); setStatus(''); }} disabled={sending}>Alterar e-mail</button>
       </form>}
-      {status && <p className="notice" role="status">{status}</p>}
+      {status && <p className={`notice ${noticeTone(status)}`} role="status">{status}</p>}
       <nav className="legal-links" aria-label="Informações"><a href="/sobre">Sobre</a><a href="/ajuda">Ajuda</a><a href="/termos">Termos</a><a href="/privacidade">Privacidade</a></nav>
     </section>
   </main>;

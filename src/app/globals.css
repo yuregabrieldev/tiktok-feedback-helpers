@@ -25,7 +25,10 @@ button { -webkit-tap-highlight-color: transparent; }
 h1 { max-width: 450px; margin: 13px 0 10px; font: clamp(44px, 13vw, 72px)/.84 'Archivo Black', sans-serif; letter-spacing: -.09em; }
 .intro { max-width: 360px; margin: 0 0 24px; font-size: 16px; line-height: 1.38; }
 .notice { margin: 0 0 18px; padding: 10px 12px; border: 1px solid var(--ink); background: var(--soft-acid); font: 12px/1.4 'DM Mono', monospace; }
+.notice.error { border-color: #a52b2b; background: #f8d9d4; color: #651d1d; }
+.notice.success { background: var(--soft-acid); }
 .notice-action { display: block; width: 100%; color: var(--ink); text-align: left; cursor: pointer; }
+.notice.error.notice-action { color: #651d1d; }
 .campaign-card, .evaluation, .publish-card, .account-card { position: relative; border: 1px solid var(--ink); background: var(--paper); box-shadow: 6px 6px 0 var(--ink); }
 .campaign-card { padding: 14px; }
 .card-top { display: flex; justify-content: space-between; gap: 8px; padding-bottom: 13px; border-bottom: 1px solid var(--line); color: var(--muted); }
