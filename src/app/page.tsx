@@ -291,7 +291,7 @@ export default function HomePage() {
         <div className="eyebrow"><span className="live-dot" /> {view === 'tutorial' ? 'ACESSO PENDENTE' : 'COMUNIDADE ATIVA'}</div>
         <h1 id="screen-title">{title}</h1>
 
-        {notice && <button className="notice notice-action" role="status" onClick={() => activeMission && navigateTo('evaluate')}>{notice}</button>}
+        {notice && view !== 'publish' && <button className="notice notice-action" role="status" onClick={() => activeMission && navigateTo('evaluate')}>{notice}</button>}
 
         {view === 'tutorial' && (
           <>
