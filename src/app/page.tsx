@@ -116,7 +116,7 @@ export default function HomePage() {
     if (!item) { setNotice('Não há campanhas disponíveis neste momento.'); return; }
     // Reserve the tab while this click is still a user gesture. Opening it only
     // after the RPC finishes is commonly blocked by mobile browsers as a popup.
-    const tiktokTab = window.open('', '_blank');
+    const tiktokTab = window.open(item.creator?.tiktok_profile_url || 'about:blank', '_blank', 'noopener,noreferrer');
     if (tiktokTab) tiktokTab.opener = null;
     const supabase = createBrowserSupabaseClient();
     const { data, error } = await supabase.rpc('start_mission', { p_campaign_id: item.id });
@@ -127,7 +127,7 @@ export default function HomePage() {
     setMissionKind(kind);
     setNotice('Missão iniciada. Ao voltar do TikTok, envie a sua avaliação.');
     setView('evaluate');
-    if (tiktokTab) tiktokTab.location.replace(data[0].tiktok_profile_url);
+    if (tiktokTab && data[0].tiktok_profile_url !== item.creator?.tiktok_profile_url) tiktokTab.location.replace(data[0].tiktok_profile_url);
     else window.open(data[0].tiktok_profile_url, '_blank', 'noopener,noreferrer');
   }
 
