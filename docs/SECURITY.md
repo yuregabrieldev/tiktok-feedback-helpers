@@ -1,25 +1,24 @@
-# Segurança operacional — PULSO
+# Segurança e moderação de imagens
 
-## Segredos
+## Dependências
 
-- `NEXT_PUBLIC_SUPABASE_URL` e `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` podem ser usados no navegador.
-- `SUPABASE_SERVICE_ROLE_KEY` é exclusivamente de servidor e nunca entra no Git, cliente ou logs.
-- Como a chave de serviço foi partilhada durante a configuração inicial, ela deve ser rotacionada no painel Supabase antes de produção.
+O projeto usa um override de `postcss` (`8.5.28`) e `sharp` (`0.35.4`).
+Verifique com:
 
-## Imagens
-
-O endpoint de avatar aceita JPEG, PNG, WebP e HEIC/HEIF, valida o arquivo por decodificação, remove EXIF e recria uma imagem WebP. O arquivo original nunca é público.
-
-Antes de disponibilizar uploads ao público, configure `IMAGE_MODERATION_ENDPOINT` com um serviço de moderação de imagem. Ele deve receber a imagem processada e responder JSON no formato:
-
-```json
-{ "allowed": true }
+```bash
+npm audit --omit=dev --audit-level=high
 ```
 
-ou
+## Uploads
 
-```json
-{ "allowed": false }
-```
+`/api/profile/avatar` autentica o utilizador, valida o tipo e dimensões da imagem,
+descarta EXIF, converte para WebP e guarda no bucket privado `avatars-clean`.
+Mídias de campanhas só podem ser alteradas por administradores.
 
-Sem uma moderação configurada, mantenha uploads de perfil desativados em produção. A validação de formato não detecta nudez ou material gráfico.
+## Moderação de conteúdo
+
+O endpoint aceita um classificador externo através de `IMAGE_MODERATION_ENDPOINT`.
+Ele deve receber JSON `{ imageBase64, mimeType }` e responder `{ "allowed": true }`
+ou `{ "allowed": false }`. Configure a URL e as credenciais do provedor apenas na
+Vercel (nunca no código ou em variáveis `NEXT_PUBLIC_*`). Sem esse endpoint, a
+validação técnica continua ativa, mas não existe detecção automática de nudez.
