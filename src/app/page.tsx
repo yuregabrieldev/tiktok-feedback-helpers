@@ -7,7 +7,7 @@ import { createBrowserSupabaseClient, hasSupabaseConfig } from '@/lib/supabase/b
 type View = 'tutorial' | 'feed' | 'evaluate' | 'publish' | 'profile';
 type MissionKind = 'tutorial' | 'standard';
 type ProfileData = { display_name: string; username: string; tiktok_profile_url: string | null; niche: string; bio: string; avatar_path?: string | null; tiktok_screenshot_path?: string | null; tutorial_completed_at?: string | null; is_admin?: boolean };
-type CampaignData = { id: string; kind: 'normal' | 'seed' | 'featured' | 'tutorial'; status?: string; niche: string | null; prompt: string; title: string; creator_id: string; creator: { display_name: string; username: string; tiktok_profile_url: string | null; niche: string | null; bio: string; avatarUrl?: string | null; screenshotUrl?: string | null } | null; feedback_completed: number; feedback_target: number };
+type CampaignData = { id: string; kind: 'normal' | 'seed' | 'featured' | 'tutorial'; status?: string; niche: string | null; prompt: string; title: string; creator_id: string; campaign_display_name?: string | null; campaign_username?: string | null; campaign_tiktok_profile_url?: string | null; campaign_bio?: string | null; creator: { display_name: string; username: string; tiktok_profile_url: string | null; niche: string | null; bio: string; avatarUrl?: string | null; screenshotUrl?: string | null } | null; feedback_completed: number; feedback_target: number };
 
 const viewPaths: Record<View, string> = { tutorial: '/primeira-missao', feed: '/for-you', evaluate: '/avaliar', publish: '/publicar', profile: '/conta' };
 const pathViews: Record<string, View> = Object.fromEntries(Object.entries(viewPaths).map(([view, path]) => [path, view as View]));
@@ -35,7 +35,7 @@ export default function HomePage() {
   const [sentCount, setSentCount] = useState(0);
   const [adminCampaigns, setAdminCampaigns] = useState<CampaignData[]>([]);
   const [adminEditingId, setAdminEditingId] = useState<string | null>(null);
-  const [adminDraft, setAdminDraft] = useState({ title: '', prompt: '', niche: '', status: 'active', feedback_target: 10 });
+  const [adminDraft, setAdminDraft] = useState({ title: '', prompt: '', niche: '', status: 'active', feedback_target: 10, display_name: '', username: '', tiktok_profile_url: '', bio: '' });
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [screenshotUrl, setScreenshotUrl] = useState<string | null>(null);
 
@@ -101,7 +101,7 @@ export default function HomePage() {
     const authHeaders = sessionState.session?.access_token ? { Authorization: `Bearer ${sessionState.session.access_token}` } : undefined;
     const { data: viewerRow } = await supabase.from('profiles').select('is_admin').eq('id', userId).maybeSingle();
     const viewer = viewerRow as { is_admin?: boolean } | null;
-    let campaignQuery = supabase.from('campaigns').select('id,kind,status,niche,prompt,title,creator_id,feedback_completed,feedback_target,creator:profiles!campaigns_creator_id_fkey(display_name,username,tiktok_profile_url,niche,bio)').order('created_at', { ascending: false });
+    let campaignQuery = supabase.from('campaigns').select('id,kind,status,niche,prompt,title,creator_id,feedback_completed,feedback_target,campaign_display_name,campaign_username,campaign_tiktok_profile_url,campaign_bio,creator:profiles!campaigns_creator_id_fkey(display_name,username,tiktok_profile_url,niche,bio)').order('created_at', { ascending: false });
     if (!viewer?.is_admin) campaignQuery = campaignQuery.eq('status', 'active');
     const [{ data: rows }, { data: feedbackRows }, { data: receivedRows }, { data: sentRows }] = await Promise.all([
       campaignQuery,
@@ -117,7 +117,7 @@ export default function HomePage() {
       if (!item.creator_id) return item;
       const mediaResponse = await fetch(`/api/profile/media?profileId=${encodeURIComponent(item.creator_id)}`, { headers: authHeaders });
       const media = mediaResponse.ok ? await mediaResponse.json() : {};
-      return { ...item, creator: item.creator ? { ...item.creator, avatarUrl: media.avatarUrl, screenshotUrl: media.screenshotUrl } : item.creator };
+      return { ...item, creator: item.creator ? { ...item.creator, display_name: item.campaign_display_name || item.creator.display_name, username: item.campaign_username || item.creator.username, tiktok_profile_url: item.campaign_tiktok_profile_url || item.creator.tiktok_profile_url, bio: item.campaign_bio || item.creator.bio, avatarUrl: media.avatarUrl, screenshotUrl: media.screenshotUrl } : item.creator };
     }));
     setCampaigns(withMedia);
     setSelectedCampaign((current) => current && withMedia.some((item) => item.id === current.id) ? current : withMedia.find((item) => item.creator_id !== userId) ?? withMedia[0] ?? null);
@@ -235,6 +235,8 @@ export default function HomePage() {
     const supabase = createBrowserSupabaseClient();
     const { error } = await supabase.rpc('admin_update_campaign', { p_campaign_id: campaignId, p_title: adminDraft.title, p_prompt: adminDraft.prompt, p_niche: adminDraft.niche, p_status: adminDraft.status, p_feedback_target: adminDraft.feedback_target });
     if (error) { setNotice('Não foi possível guardar a campanha.'); return; }
+    const { error: profileError } = await supabase.rpc('admin_update_campaign_profile', { p_campaign_id: campaignId, p_display_name: adminDraft.display_name, p_username: adminDraft.username, p_tiktok_profile_url: adminDraft.tiktok_profile_url, p_bio: adminDraft.bio });
+    if (profileError) { setNotice('Campanha guardada, mas não foi possível guardar o perfil da missão.'); return; }
     setAdminEditingId(null); setNotice('Campanha atualizada.');
     if (user) await loadCommunityData(user.id);
   }
@@ -250,7 +252,7 @@ export default function HomePage() {
 
   function editAdminCampaign(item: CampaignData) {
     setAdminEditingId(item.id);
-    setAdminDraft({ title: item.title || '', prompt: item.prompt, niche: item.niche || '', status: item.status || 'active', feedback_target: item.feedback_target });
+    setAdminDraft({ title: item.title || '', prompt: item.prompt, niche: item.niche || '', status: item.status || 'active', feedback_target: item.feedback_target, display_name: item.campaign_display_name || item.creator?.display_name || '', username: item.campaign_username || item.creator?.username || '', tiktok_profile_url: item.campaign_tiktok_profile_url || item.creator?.tiktok_profile_url || '', bio: item.campaign_bio || item.creator?.bio || '' });
   }
 
   async function uploadProfileImage(event: ChangeEvent<HTMLInputElement>, kind: 'avatar' | 'screenshot') {
@@ -370,6 +372,10 @@ export default function HomePage() {
                 <label>Título<input value={adminDraft.title} onChange={(event) => setAdminDraft({ ...adminDraft, title: event.target.value })} maxLength={120} required /></label>
                 <label>Pergunta<textarea value={adminDraft.prompt} onChange={(event) => setAdminDraft({ ...adminDraft, prompt: event.target.value })} minLength={12} maxLength={220} required /></label>
                 <label>Nicho<input value={adminDraft.niche} onChange={(event) => setAdminDraft({ ...adminDraft, niche: event.target.value })} maxLength={80} /></label>
+                <label>Nome do perfil<input value={adminDraft.display_name} onChange={(event) => setAdminDraft({ ...adminDraft, display_name: event.target.value })} required /></label>
+                <label>@ do TikTok<input value={adminDraft.username} onChange={(event) => setAdminDraft({ ...adminDraft, username: event.target.value.replace(/^@/, '') })} required /></label>
+                <label>Link do perfil<input type="url" value={adminDraft.tiktok_profile_url} onChange={(event) => setAdminDraft({ ...adminDraft, tiktok_profile_url: event.target.value })} required /></label>
+                <label>Bio<textarea value={adminDraft.bio} onChange={(event) => setAdminDraft({ ...adminDraft, bio: event.target.value })} maxLength={220} /></label>
                 <label>Estado<select value={adminDraft.status} onChange={(event) => setAdminDraft({ ...adminDraft, status: event.target.value })}><option value="active">Ativa</option><option value="paused">Pausada</option><option value="expired">Expirada</option></select></label>
                 <div className="admin-actions"><button className="primary-action" type="submit">Guardar</button><button className="secondary-action" type="button" onClick={() => setAdminEditingId(null)}>Cancelar</button></div>
               </form> : <div className="admin-campaign-row" key={item.id}><div><span>{item.kind === 'tutorial' ? 'MISSÃO PRINCIPAL' : item.kind.toUpperCase()} · {item.status}</span><b>{item.title || item.prompt}</b><small>{item.feedback_completed}/{item.feedback_target} feedbacks</small></div><button className="secondary-action" onClick={() => editAdminCampaign(item)}>Editar</button></div>)}
