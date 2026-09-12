@@ -183,7 +183,7 @@ export default function HomePage() {
   async function launchCampaign(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (activeMission) { setNotice('Termine a missão aberta antes de publicar uma campanha.'); navigateTo('evaluate'); return; }
-    if (points < 1) { setNotice('É preciso ter pelo menos 1 ponto para lançar uma campanha.'); return; }
+    if (!profile.is_admin && points < 1) { setNotice('É preciso ter pelo menos 1 ponto para lançar uma campanha.'); return; }
     if (!profile.tiktok_profile_url) { setNotice('Complete o seu perfil com o link do TikTok antes de publicar.'); navigateTo('profile'); return; }
     if (campaignPrompt.trim().length < 12) { setNotice('Escreva uma pergunta com pelo menos 12 caracteres.'); return; }
     setPublishing(true);
@@ -191,7 +191,7 @@ export default function HomePage() {
     const { error } = await supabase.rpc('create_normal_campaign', { p_prompt: campaignPrompt.trim(), p_niche: profile.niche || 'GERAL', p_feedback_target: 1 });
     setPublishing(false);
     if (error) { setNotice(error.message.includes('insufficient_points') ? 'Você não tem pontos suficientes.' : 'Não foi possível lançar a campanha agora.'); return; }
-    setPoints((value) => value - 1); setCampaignPrompt(''); setNotice('Campanha lançada. Ela já está disponível no For You.'); navigateTo('feed');
+    if (!profile.is_admin) setPoints((value) => value - 1); setCampaignPrompt(''); setNotice('Campanha lançada. Ela já está disponível no For You.'); navigateTo('feed');
   }
 
   async function saveProfile(event: FormEvent<HTMLFormElement>) {
@@ -320,7 +320,7 @@ export default function HomePage() {
             <label htmlFor="campaign-question">O que quer saber?</label>
             <textarea id="campaign-question" value={campaignPrompt} onChange={(event) => setCampaignPrompt(event.target.value)} placeholder="A minha bio deixa claro o que eu posto?" minLength={12} maxLength={220} required />
             <div className="purchase-row"><span>1 feedback</span><b>1 ponto</b></div>
-            <button className="primary-action" type="submit" disabled={publishing || points < 1}>{publishing ? 'A lançar…' : 'Lançar campanha'} <span>−1</span></button>
+            <button className="primary-action" type="submit" disabled={publishing || (!profile.is_admin && points < 1)}>{publishing ? 'A lançar…' : 'Lançar campanha'} {!profile.is_admin && <span>−1</span>}</button>
           </form>
         )}
 
