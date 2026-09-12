@@ -46,6 +46,20 @@ export async function POST(request: Request) {
   if (!(upload instanceof File)) return NextResponse.json({ error: 'Envie uma imagem.' }, { status: 400 });
   if (upload.size === 0 || upload.size > maxSourceBytes) return NextResponse.json({ error: 'A imagem deve ter até 8 MB.' }, { status: 400 });
 
+  // Campaign media is written with the service-role client, so never trust a
+  // campaignId supplied by the browser. Only an active admin may write media
+  // for the managed tutorial/featured campaigns.
+  const admin = createAdminSupabaseClient();
+  if (campaignId) {
+    const [{ data: actor }, { data: campaign }] = await Promise.all([
+      admin.from('profiles').select('is_admin,is_suspended').eq('id', user.id).maybeSingle(),
+      admin.from('campaigns').select('id,kind').eq('id', campaignId).maybeSingle(),
+    ]);
+    if (!actor?.is_admin || actor.is_suspended || !campaign || !['tutorial', 'featured'].includes(campaign.kind)) {
+      return NextResponse.json({ error: 'Não autorizado.' }, { status: 403 });
+    }
+  }
+
   try {
     const source = Buffer.from(await upload.arrayBuffer());
     const image = sharp(source, { limitInputPixels: maxDimension * maxDimension });
@@ -75,7 +89,6 @@ export async function POST(request: Request) {
       const result = moderation.ok ? await moderation.json() as { allowed?: boolean } : null;
       if (!result?.allowed) return NextResponse.json({ error: 'Não foi possível usar esta imagem.' }, { status: 400 });
     }
-    const admin = createAdminSupabaseClient();
     const filePath = `${campaignId ? `campaigns/${campaignId}` : user.id}/${kind}-${crypto.randomUUID()}.webp`;
     const { error: uploadError } = await admin.storage.from('avatars-clean').upload(filePath, safeImage, {
       contentType: 'image/webp',

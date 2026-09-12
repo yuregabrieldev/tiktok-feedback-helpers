@@ -6,6 +6,18 @@ import { createBrowserSupabaseClient, hasSupabaseConfig } from '@/lib/supabase/b
 
 type View = 'tutorial' | 'feed' | 'evaluate' | 'publish' | 'profile';
 type MissionKind = 'tutorial' | 'standard';
+
+function safeTikTokUrl(value: string | null | undefined) {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'https:' || !['tiktok.com', 'www.tiktok.com', 'm.tiktok.com'].includes(url.hostname.toLowerCase())) return null;
+    if (!/^\/@[A-Za-z0-9._-]+\/?$/.test(url.pathname)) return null;
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
 type ProfileData = { display_name: string; username: string; tiktok_profile_url: string | null; niche: string; bio: string; avatar_path?: string | null; tiktok_screenshot_path?: string | null; tutorial_completed_at?: string | null; is_admin?: boolean };
 type CampaignData = { id: string; kind: 'normal' | 'seed' | 'featured' | 'tutorial'; status?: string; niche: string | null; prompt: string; title: string; creator_id: string; campaign_display_name?: string | null; campaign_username?: string | null; campaign_tiktok_profile_url?: string | null; campaign_bio?: string | null; campaign_avatar_path?: string | null; campaign_screenshot_path?: string | null; creator: { display_name: string; username: string; tiktok_profile_url: string | null; niche: string | null; bio: string; avatarUrl?: string | null; screenshotUrl?: string | null } | null; feedback_completed: number; feedback_target: number };
 
@@ -148,14 +160,16 @@ export default function HomePage() {
     if (activeMission) {
       setNotice('Termine a missão aberta antes de iniciar outra.');
       navigateTo('evaluate');
-      const openUrl = item?.creator?.tiktok_profile_url;
+      const openUrl = safeTikTokUrl(item?.creator?.tiktok_profile_url);
       if (openUrl) window.open(openUrl, '_blank', 'noopener,noreferrer');
       return;
     }
     if (!item) { setNotice('Não há campanhas disponíveis neste momento.'); return; }
+    const targetUrl = safeTikTokUrl(item.creator?.tiktok_profile_url);
+    if (!targetUrl) { setNotice('O perfil desta campanha não tem um link TikTok válido.'); return; }
     // Reserve the tab while this click is still a user gesture. Opening it only
     // after the RPC finishes is commonly blocked by mobile browsers as a popup.
-    const tiktokTab = window.open(item.creator?.tiktok_profile_url || 'about:blank', '_blank', 'noopener,noreferrer');
+    const tiktokTab = window.open(targetUrl, '_blank', 'noopener,noreferrer');
     if (tiktokTab) tiktokTab.opener = null;
     const supabase = createBrowserSupabaseClient();
     const { data, error } = await supabase.rpc('start_mission', { p_campaign_id: item.id });
@@ -166,8 +180,10 @@ export default function HomePage() {
     setMissionKind(kind);
     setNotice('Missão iniciada. Ao voltar do TikTok, envie a sua avaliação.');
     navigateTo('evaluate');
-    if (tiktokTab && data[0].tiktok_profile_url !== item.creator?.tiktok_profile_url) tiktokTab.location.replace(data[0].tiktok_profile_url);
-    else window.open(data[0].tiktok_profile_url, '_blank', 'noopener,noreferrer');
+    const resolvedUrl = safeTikTokUrl(data[0].tiktok_profile_url);
+    if (!resolvedUrl) { tiktokTab?.close(); setNotice('O perfil desta campanha não tem um link TikTok válido.'); return; }
+    if (tiktokTab && resolvedUrl !== targetUrl) tiktokTab.location.replace(resolvedUrl);
+    else if (!tiktokTab) window.open(resolvedUrl, '_blank', 'noopener,noreferrer');
   }
 
   async function submitFeedback(event: FormEvent<HTMLFormElement>) {
