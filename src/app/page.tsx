@@ -6,7 +6,7 @@ import { createBrowserSupabaseClient, hasSupabaseConfig } from '@/lib/supabase/b
 
 type View = 'tutorial' | 'feed' | 'evaluate' | 'publish' | 'profile';
 type MissionKind = 'tutorial' | 'standard';
-type ProfileData = { display_name: string; username: string; tiktok_profile_url: string; niche: string; bio: string; avatar_path?: string | null; tiktok_screenshot_path?: string | null; tutorial_completed_at?: string | null; is_admin?: boolean };
+type ProfileData = { display_name: string; username: string; tiktok_profile_url: string | null; niche: string; bio: string; avatar_path?: string | null; tiktok_screenshot_path?: string | null; tutorial_completed_at?: string | null; is_admin?: boolean };
 type CampaignData = { id: string; kind: 'normal' | 'seed' | 'featured' | 'tutorial'; status?: string; niche: string | null; prompt: string; title: string; creator_id: string; creator: { display_name: string; username: string; tiktok_profile_url: string | null; niche: string | null; bio: string; avatarUrl?: string | null; screenshotUrl?: string | null } | null; feedback_completed: number; feedback_target: number };
 
 export default function HomePage() {
@@ -162,9 +162,21 @@ export default function HomePage() {
   async function saveProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const supabase = createBrowserSupabaseClient();
-    const { error } = await supabase.from('profiles').update(profileDraft).eq('id', user?.id);
+    if (!user) return;
+    // Only client-editable fields are sent. Internal flags and media paths must
+    // never be overwritten by a stale form snapshot from another session.
+    const editableProfile = {
+      display_name: profileDraft.display_name.trim(),
+      username: profileDraft.username.trim().replace(/^@+/, ''),
+      tiktok_profile_url: profileDraft.tiktok_profile_url?.trim() || null,
+      niche: profileDraft.niche.trim(),
+      bio: profileDraft.bio.trim(),
+    };
+    const { error } = await supabase.from('profiles').update(editableProfile).eq('id', user.id);
     if (error) { setNotice('Não foi possível guardar o perfil. Verifique o link do TikTok.'); return; }
-    setProfile(profileDraft); setProfileEditing(false); setNotice('Perfil atualizado.');
+    setProfile((current) => ({ ...current, ...editableProfile }));
+    setProfileDraft((current) => ({ ...current, ...editableProfile }));
+    setProfileEditing(false); setNotice('Perfil atualizado.');
   }
 
   async function saveAdminCampaign(event: FormEvent<HTMLFormElement>, campaignId: string) {
@@ -283,7 +295,7 @@ export default function HomePage() {
             {profileEditing ? <form className="profile-form" onSubmit={saveProfile}>
               <label htmlFor="profile-name">Nome<input id="profile-name" value={profileDraft.display_name} onChange={(event) => setProfileDraft({ ...profileDraft, display_name: event.target.value })} /></label>
               <label htmlFor="profile-username">@ do TikTok<input id="profile-username" value={profileDraft.username} onChange={(event) => setProfileDraft({ ...profileDraft, username: event.target.value.replace(/^@/, '') })} placeholder="o_seu_tiktok" required /></label>
-              <label htmlFor="profile-url">Link do perfil TikTok<input id="profile-url" type="url" pattern="https://(www\\.)?tiktok\\.com/@[A-Za-z0-9._-]+/?" value={profileDraft.tiktok_profile_url} onChange={(event) => setProfileDraft({ ...profileDraft, tiktok_profile_url: event.target.value })} placeholder="https://www.tiktok.com/@o_seu_tiktok" required /></label>
+              <label htmlFor="profile-url">Link do perfil TikTok<input id="profile-url" type="url" pattern="https://(www\\.)?tiktok\\.com/@[A-Za-z0-9._-]+/?" value={profileDraft.tiktok_profile_url ?? ''} onChange={(event) => setProfileDraft({ ...profileDraft, tiktok_profile_url: event.target.value })} placeholder="https://www.tiktok.com/@o_seu_tiktok" required /></label>
               <label htmlFor="profile-niche">Nicho<input id="profile-niche" value={profileDraft.niche} onChange={(event) => setProfileDraft({ ...profileDraft, niche: event.target.value })} placeholder="Ex.: receitas" /></label>
               <label htmlFor="profile-bio">Bio<textarea id="profile-bio" value={profileDraft.bio} onChange={(event) => setProfileDraft({ ...profileDraft, bio: event.target.value })} maxLength={220} /></label>
               <div className="screenshot-field"><label className="upload-label">Screenshot do perfil TikTok<input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" onChange={(event) => void uploadProfileImage(event, 'screenshot')} /></label><button type="button" className="help-dot" title="Envie uma captura onde apareçam o nome e o @ do seu perfil no TikTok." aria-label="O que é o screenshot do perfil?">?</button><small>Mostra que o link pertence a si. O @ deve estar visível.</small></div>
