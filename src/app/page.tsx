@@ -499,7 +499,7 @@ function CampaignCard({ campaign, admin = false, owner = false, onAction, onDele
     <p className="creator-description">{creator?.bio || 'Peça uma leitura honesta de alguém da comunidade.'}</p>
     {creator?.screenshotUrl && <img className="profile-proof" src={creator.screenshotUrl} alt="Screenshot do perfil TikTok" />}
     <div className="request"><span>PEDIDO DA VEZ</span><p>“{campaign.prompt}”</p></div>
-    {(!admin || campaign.kind === 'tutorial') && <button className="primary-action" onClick={onAction} disabled={owner}>{owner ? 'A sua campanha' : <>Conhecer e avaliar {!admin && <span>+1</span>}</>}</button>}
+    {(!admin || campaign.kind === 'tutorial') && <button className="primary-action" onClick={onAction} disabled={owner}>{owner ? 'A sua campanha' : campaign.kind === 'tutorial' ? 'Avaliar para desbloquear o PULSO' : <>Conhecer e avaliar {!admin && <span>+1</span>}</>}</button>}
     {admin && onDelete && <button className="secondary-action admin-delete" onClick={onDelete}>Excluir publicação</button>}
   </article>;
 }
