@@ -85,8 +85,11 @@ export default function HomePage() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'campaigns' }, refresh)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'feedbacks' }, refresh)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, refresh)
-      .subscribe();
-    return () => { void supabase.removeChannel(channel); };
+      .subscribe((status) => { if (status === 'SUBSCRIBED') refresh(); });
+    // Realtime is the fast path. This low-frequency revalidation keeps the
+    // feed correct if a mobile browser temporarily loses its websocket.
+    const refreshInterval = window.setInterval(refresh, 30_000);
+    return () => { window.clearInterval(refreshInterval); void supabase.removeChannel(channel); };
   }, [user]);
 
   useEffect(() => {
@@ -123,14 +126,19 @@ export default function HomePage() {
     const viewer = viewerRow as { is_admin?: boolean; tutorial_completed_at?: string | null } | null;
     let campaignQuery = supabase.from('campaigns').select('id,kind,status,niche,prompt,title,creator_id,feedback_completed,feedback_target,campaign_display_name,campaign_username,campaign_tiktok_profile_url,campaign_bio,creator:profiles!campaigns_creator_id_fkey(display_name,username,tiktok_profile_url,niche,bio)').order('created_at', { ascending: false });
     if (!viewer?.is_admin) campaignQuery = campaignQuery.eq('status', 'active');
-    const [{ data: rows }, { data: feedbackRows }, { data: receivedRows }, { data: sentRows }] = await Promise.all([
+    const [campaignResult, feedbackResult, receivedResult, sentResult] = await Promise.all([
       campaignQuery,
       supabase.from('feedbacks').select('campaign_id').eq('reviewer_id', userId),
       supabase.from('feedbacks').select('id,bio_clarity,suggestion,created_at,campaigns!inner(title,creator_id)').eq('campaigns.creator_id', userId).order('created_at', { ascending: false }).limit(50),
       supabase.from('campaigns').select('id').eq('creator_id', userId),
     ]);
-    const completed = new Set((feedbackRows ?? []).map((row: { campaign_id: string }) => row.campaign_id));
-    const allCampaigns = (rows ?? []) as unknown as CampaignData[];
+    if (campaignResult.error) {
+      setDataLoading(false);
+      setNotice('Não foi possível atualizar o For You agora. Tente novamente em instantes.');
+      return;
+    }
+    const completed = new Set((feedbackResult.data ?? []).map((row: { campaign_id: string }) => row.campaign_id));
+    const allCampaigns = (campaignResult.data ?? []) as unknown as CampaignData[];
     const available = viewer?.is_admin
       ? allCampaigns.filter((row) => row.status !== 'removed')
       : allCampaigns.filter((row) => row.status === 'active' && (row.kind === 'tutorial' ? !viewer?.tutorial_completed_at : ((!completed.has(row.id) || row.creator_id === userId) && row.feedback_completed < row.feedback_target)));
@@ -145,9 +153,9 @@ export default function HomePage() {
     setSelectedCampaign((current) => current && current.kind !== 'tutorial' && withMedia.some((item) => item.id === current.id)
       ? current
       : withMedia.find((item) => item.kind !== 'tutorial' && item.creator_id !== userId) ?? withMedia.find((item) => item.kind !== 'tutorial') ?? null);
-    setReceivedCount((receivedRows ?? []).length);
-    setReceivedFeedbacks((receivedRows ?? []) as unknown as ReceivedFeedback[]);
-    setSentCount((sentRows ?? []).length);
+    setReceivedCount((receivedResult.data ?? []).length);
+    setReceivedFeedbacks((receivedResult.data ?? []) as unknown as ReceivedFeedback[]);
+    setSentCount((sentResult.data ?? []).length);
     const { data: openMissionRow } = await supabase.from('missions').select('id,campaign_id,status,expires_at,campaigns!inner(id,kind,status,niche,prompt,title,creator_id,feedback_completed,feedback_target,creator:profiles!campaigns_creator_id_fkey(display_name,username,tiktok_profile_url,niche,bio))').eq('evaluator_id', userId).in('status', ['started', 'ready_for_feedback']).gt('expires_at', new Date().toISOString()).maybeSingle();
     const openMission = openMissionRow as { id: string; campaigns: CampaignData } | null;
     if (openMission?.id) {
