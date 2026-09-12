@@ -9,6 +9,9 @@ type MissionKind = 'tutorial' | 'standard';
 type ProfileData = { display_name: string; username: string; tiktok_profile_url: string | null; niche: string; bio: string; avatar_path?: string | null; tiktok_screenshot_path?: string | null; tutorial_completed_at?: string | null; is_admin?: boolean };
 type CampaignData = { id: string; kind: 'normal' | 'seed' | 'featured' | 'tutorial'; status?: string; niche: string | null; prompt: string; title: string; creator_id: string; creator: { display_name: string; username: string; tiktok_profile_url: string | null; niche: string | null; bio: string; avatarUrl?: string | null; screenshotUrl?: string | null } | null; feedback_completed: number; feedback_target: number };
 
+const viewPaths: Record<View, string> = { tutorial: '/primeira-missao', feed: '/for-you', evaluate: '/avaliar', publish: '/publicar', profile: '/conta' };
+const pathViews: Record<string, View> = Object.fromEntries(Object.entries(viewPaths).map(([view, path]) => [path, view as View]));
+
 export default function HomePage() {
   const [authLoading, setAuthLoading] = useState(true);
   const [user, setUser] = useState<User | null>(null);
@@ -36,6 +39,24 @@ export default function HomePage() {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [screenshotUrl, setScreenshotUrl] = useState<string | null>(null);
 
+  function navigateTo(nextView: View, replace = false) {
+    if (typeof window !== 'undefined') {
+      const path = viewPaths[nextView];
+      (replace ? window.history.replaceState : window.history.pushState).call(window.history, {}, '', path);
+    }
+    setView(nextView);
+  }
+
+  useEffect(() => {
+    const syncRoute = () => {
+      const routedView = pathViews[window.location.pathname];
+      if (routedView) setView(routedView);
+    };
+    syncRoute();
+    window.addEventListener('popstate', syncRoute);
+    return () => window.removeEventListener('popstate', syncRoute);
+  }, []);
+
   useEffect(() => {
     if (!hasSupabaseConfig) {
       setAuthLoading(false);
@@ -49,7 +70,7 @@ export default function HomePage() {
           supabase.from('profiles').select('display_name,username,tiktok_profile_url,niche,bio,avatar_path,tiktok_screenshot_path,tutorial_completed_at,is_admin').eq('id', data.session.user.id).maybeSingle(),
           supabase.rpc('current_points'),
         ]);
-        if (profileRow) { setProfile(profileRow as ProfileData); setProfileDraft(profileRow as ProfileData); const loadedProfile = profileRow as ProfileData; const authHeaders = data.session.access_token ? { Authorization: `Bearer ${data.session.access_token}` } : undefined; setView(loadedProfile.is_admin || loadedProfile.tutorial_completed_at ? 'feed' : 'tutorial'); if (loadedProfile.avatar_path) void fetch('/api/profile/avatar?kind=avatar', { headers: authHeaders }).then((response) => response.ok ? response.json() : null).then((result) => result?.url && setAvatarUrl(result.url)); if (loadedProfile.tiktok_screenshot_path) void fetch('/api/profile/avatar?kind=screenshot', { headers: authHeaders }).then((response) => response.ok ? response.json() : null).then((result) => result?.url && setScreenshotUrl(result.url)); }
+        if (profileRow) { setProfile(profileRow as ProfileData); setProfileDraft(profileRow as ProfileData); const loadedProfile = profileRow as ProfileData; const authHeaders = data.session.access_token ? { Authorization: `Bearer ${data.session.access_token}` } : undefined; navigateTo(loadedProfile.is_admin || loadedProfile.tutorial_completed_at ? 'feed' : 'tutorial', true); if (loadedProfile.avatar_path) void fetch('/api/profile/avatar?kind=avatar', { headers: authHeaders }).then((response) => response.ok ? response.json() : null).then((result) => result?.url && setAvatarUrl(result.url)); if (loadedProfile.tiktok_screenshot_path) void fetch('/api/profile/avatar?kind=screenshot', { headers: authHeaders }).then((response) => response.ok ? response.json() : null).then((result) => result?.url && setScreenshotUrl(result.url)); }
         if (typeof pointTotal === 'number') setPoints(pointTotal);
         await loadCommunityData(data.session.user.id);
       }
@@ -102,7 +123,7 @@ export default function HomePage() {
           missionCampaign.creator = { ...missionCampaign.creator, avatarUrl: media.avatarUrl ?? null, screenshotUrl: media.screenshotUrl ?? null };
         }
       }
-      setMissionId(openMission.id); setActiveMission(true); setSelectedCampaign(missionCampaign); setMissionKind(missionCampaign.kind === 'tutorial' ? 'tutorial' : 'standard'); setView('evaluate');
+      setMissionId(openMission.id); setActiveMission(true); setSelectedCampaign(missionCampaign); setMissionKind(missionCampaign.kind === 'tutorial' ? 'tutorial' : 'standard'); navigateTo('evaluate');
     }
     setDataLoading(false);
   }
@@ -110,7 +131,7 @@ export default function HomePage() {
   async function beginMission(kind: MissionKind, item = selectedCampaign) {
     if (activeMission) {
       setNotice('Termine a missão aberta antes de iniciar outra.');
-      setView('evaluate');
+      navigateTo('evaluate');
       return;
     }
     if (!item) { setNotice('Não há campanhas disponíveis neste momento.'); return; }
@@ -126,7 +147,7 @@ export default function HomePage() {
     setActiveMission(true);
     setMissionKind(kind);
     setNotice('Missão iniciada. Ao voltar do TikTok, envie a sua avaliação.');
-    setView('evaluate');
+    navigateTo('evaluate');
     if (tiktokTab && data[0].tiktok_profile_url !== item.creator?.tiktok_profile_url) tiktokTab.location.replace(data[0].tiktok_profile_url);
     else window.open(data[0].tiktok_profile_url, '_blank', 'noopener,noreferrer');
   }
@@ -146,7 +167,7 @@ export default function HomePage() {
     const { data: total } = await supabase.rpc('current_points');
     if (typeof total === 'number') setPoints(total);
     if (result?.[0]?.tutorial_completed) setProfile((current) => ({ ...current, tutorial_completed_at: new Date().toISOString() }));
-    setView('feed');
+    navigateTo('feed');
     setNotice(awarded > 0 ? `Feedback enviado. Ganhou ${awarded} ponto.` : 'Feedback enviado. A sua conta está ativa.');
     setActiveMission(false);
     setMissionId(null);
@@ -157,16 +178,16 @@ export default function HomePage() {
 
   async function launchCampaign(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (activeMission) { setNotice('Termine a missão aberta antes de publicar uma campanha.'); setView('evaluate'); return; }
+    if (activeMission) { setNotice('Termine a missão aberta antes de publicar uma campanha.'); navigateTo('evaluate'); return; }
     if (points < 1) { setNotice('É preciso ter pelo menos 1 ponto para lançar uma campanha.'); return; }
-    if (!profile.tiktok_profile_url) { setNotice('Complete o seu perfil com o link do TikTok antes de publicar.'); setView('profile'); return; }
+    if (!profile.tiktok_profile_url) { setNotice('Complete o seu perfil com o link do TikTok antes de publicar.'); navigateTo('profile'); return; }
     if (campaignPrompt.trim().length < 12) { setNotice('Escreva uma pergunta com pelo menos 12 caracteres.'); return; }
     setPublishing(true);
     const supabase = createBrowserSupabaseClient();
     const { error } = await supabase.rpc('create_normal_campaign', { p_prompt: campaignPrompt.trim(), p_niche: profile.niche || 'GERAL', p_feedback_target: 1 });
     setPublishing(false);
     if (error) { setNotice(error.message.includes('insufficient_points') ? 'Você não tem pontos suficientes.' : 'Não foi possível lançar a campanha agora.'); return; }
-    setPoints((value) => value - 1); setCampaignPrompt(''); setNotice('Campanha lançada. Ela já está disponível no For You.'); setView('feed');
+    setPoints((value) => value - 1); setCampaignPrompt(''); setNotice('Campanha lançada. Ela já está disponível no For You.'); navigateTo('feed');
   }
 
   async function saveProfile(event: FormEvent<HTMLFormElement>) {
@@ -233,7 +254,7 @@ export default function HomePage() {
   return (
     <main className="app-shell">
       <header className="topbar">
-        <button className="brand" onClick={() => setView(view === 'tutorial' ? 'tutorial' : 'feed')} aria-label="Ir para For You">
+        <button className="brand" onClick={() => navigateTo(view === 'tutorial' ? 'tutorial' : 'feed')} aria-label="Ir para For You">
           <span className="pulse-mark" aria-hidden="true"><i /><i /><i /></span>
           <strong>PULSO</strong>
           <small>TIKTOK FEEDBACK HELPERS</small>
@@ -245,7 +266,7 @@ export default function HomePage() {
         <div className="eyebrow"><span className="live-dot" /> {view === 'tutorial' ? 'ACESSO PENDENTE' : 'COMUNIDADE ATIVA'}</div>
         <h1 id="screen-title">{title}</h1>
 
-        {notice && <button className="notice notice-action" role="status" onClick={() => activeMission && setView('evaluate')}>{notice}</button>}
+        {notice && <button className="notice notice-action" role="status" onClick={() => activeMission && navigateTo('evaluate')}>{notice}</button>}
 
         {view === 'tutorial' && (
           <>
@@ -330,9 +351,9 @@ export default function HomePage() {
       </section>
 
       {view !== 'tutorial' && <nav className="bottom-nav" aria-label="Navegação principal">
-        <button className={view === 'feed' || view === 'evaluate' ? 'active' : ''} onClick={() => setView('feed')}><Icon name="home" /><span>For You</span></button>
-        <button className={view === 'publish' ? 'active' : ''} onClick={() => setView('publish')}><Icon name="plus" /><span>Publicar</span></button>
-        <button className={view === 'profile' ? 'active' : ''} onClick={() => setView('profile')}><Icon name="user" /><span>Conta</span></button>
+        <button className={view === 'feed' || view === 'evaluate' ? 'active' : ''} onClick={() => navigateTo('feed')}><Icon name="home" /><span>For You</span></button>
+        <button className={view === 'publish' ? 'active' : ''} onClick={() => navigateTo('publish')}><Icon name="plus" /><span>Publicar</span></button>
+        <button className={view === 'profile' ? 'active' : ''} onClick={() => navigateTo('profile')}><Icon name="user" /><span>Conta</span></button>
       </nav>}
     </main>
   );
