@@ -15,6 +15,11 @@ declare
   v_tiktok_url text;
 begin
   if v_user is null then raise exception 'not_authenticated'; end if;
+  update public.missions as m
+  set status = 'expired'
+  where m.evaluator_id = v_user
+    and m.status in ('started', 'ready_for_feedback')
+    and m.expires_at < now();
   if exists (select 1 from public.missions where evaluator_id = v_user and status in ('started', 'ready_for_feedback')) then
     raise exception 'mission_in_progress';
   end if;
@@ -28,7 +33,6 @@ begin
   if v_campaign.feedback_completed >= v_campaign.feedback_target then raise exception 'campaign_full'; end if;
   select p.tiktok_profile_url into v_tiktok_url from public.profiles as p where p.id = v_campaign.creator_id;
   if v_tiktok_url is null then raise exception 'profile_link_unavailable'; end if;
-  update public.missions as m set status = 'expired' where m.campaign_id = p_campaign_id and m.evaluator_id = v_user and m.status in ('started', 'ready_for_feedback') and m.expires_at < now();
   insert into public.missions (campaign_id, evaluator_id, eligible_after, expires_at)
   values (p_campaign_id, v_user, v_eligible, v_expires)
   returning * into v_mission;

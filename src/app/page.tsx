@@ -109,7 +109,7 @@ export default function HomePage() {
     setSelectedCampaign((current) => current && withMedia.some((item) => item.id === current.id) ? current : withMedia[0] ?? null);
     setReceivedCount((receivedRows ?? []).length);
     setSentCount((sentRows ?? []).length);
-    const { data: openMissionRow } = await supabase.from('missions').select('id,campaign_id,status,campaigns!inner(id,kind,status,niche,prompt,title,creator_id,feedback_completed,feedback_target,creator:profiles!campaigns_creator_id_fkey(display_name,username,tiktok_profile_url,niche,bio))').eq('evaluator_id', userId).in('status', ['started', 'ready_for_feedback']).maybeSingle();
+    const { data: openMissionRow } = await supabase.from('missions').select('id,campaign_id,status,expires_at,campaigns!inner(id,kind,status,niche,prompt,title,creator_id,feedback_completed,feedback_target,creator:profiles!campaigns_creator_id_fkey(display_name,username,tiktok_profile_url,niche,bio))').eq('evaluator_id', userId).in('status', ['started', 'ready_for_feedback']).gt('expires_at', new Date().toISOString()).maybeSingle();
     const openMission = openMissionRow as { id: string; campaigns: CampaignData } | null;
     if (openMission?.id) {
       const missionCampaign = openMission.campaigns as unknown as CampaignData;
