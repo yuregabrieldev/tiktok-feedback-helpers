@@ -104,16 +104,21 @@ export default function HomePage() {
       return;
     }
     if (!item) { setNotice('Não há campanhas disponíveis neste momento.'); return; }
+    // Reserve the tab while this click is still a user gesture. Opening it only
+    // after the RPC finishes is commonly blocked by mobile browsers as a popup.
+    const tiktokTab = window.open('', '_blank');
+    if (tiktokTab) tiktokTab.opener = null;
     const supabase = createBrowserSupabaseClient();
     const { data, error } = await supabase.rpc('start_mission', { p_campaign_id: item.id });
-    if (error || !data?.[0]) { const reason = error?.message || ''; setNotice(reason.includes('mission_in_progress') ? 'Você já tem uma missão aberta. Conclua-a antes de começar outra.' : reason.includes('campaign_full') ? 'Esta missão já recebeu todos os feedbacks.' : reason.includes('profile_link_unavailable') ? 'O perfil ainda não tem um link TikTok válido.' : reason.includes('already_completed') ? 'Você já avaliou esta campanha.' : `Não foi possível iniciar esta missão${reason ? `: ${reason}` : '.'}`); return; }
+    if (error || !data?.[0]) { tiktokTab?.close(); const reason = error?.message || ''; setNotice(reason.includes('mission_in_progress') ? 'Você já tem uma missão aberta. Conclua-a antes de começar outra.' : reason.includes('campaign_full') ? 'Esta missão já recebeu todos os feedbacks.' : reason.includes('profile_link_unavailable') ? 'O perfil ainda não tem um link TikTok válido.' : reason.includes('already_completed') ? 'Você já avaliou esta campanha.' : `Não foi possível iniciar esta missão${reason ? `: ${reason}` : '.'}`); return; }
     setMissionId(data[0].mission_id);
     setSelectedCampaign(item);
     setActiveMission(true);
     setMissionKind(kind);
     setNotice('Missão iniciada. Ao voltar do TikTok, envie a sua avaliação.');
-    window.location.assign(data[0].tiktok_profile_url);
     setView('evaluate');
+    if (tiktokTab) tiktokTab.location.replace(data[0].tiktok_profile_url);
+    else window.open(data[0].tiktok_profile_url, '_blank', 'noopener,noreferrer');
   }
 
   async function submitFeedback(event: FormEvent<HTMLFormElement>) {
