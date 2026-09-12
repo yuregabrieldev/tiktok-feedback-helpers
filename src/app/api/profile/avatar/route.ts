@@ -80,14 +80,19 @@ export async function POST(request: Request) {
     // metadata, rejects non-images and stores only the normalized WebP.
     const moderationEndpoint = process.env.IMAGE_MODERATION_ENDPOINT;
     if (moderationEndpoint) {
+      const isHuggingFace = moderationEndpoint.includes('huggingface.co');
       const moderation = await fetch(moderationEndpoint, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ imageBase64: safeImage.toString('base64'), mimeType: 'image/webp' }),
+        headers: { 'content-type': isHuggingFace ? 'image/webp' : 'application/json', ...(process.env.IMAGE_MODERATION_API_KEY ? { authorization: `Bearer ${process.env.IMAGE_MODERATION_API_KEY}` } : {}) },
+        body: isHuggingFace ? safeImage : JSON.stringify({ imageBase64: safeImage.toString('base64'), mimeType: 'image/webp' }),
         signal: AbortSignal.timeout(8_000),
       });
-      const result = moderation.ok ? await moderation.json() as { allowed?: boolean } : null;
-      if (!result?.allowed) return NextResponse.json({ error: 'Não foi possível usar esta imagem.' }, { status: 400 });
+      const result = moderation.ok ? await moderation.json() as { allowed?: boolean; label?: string; score?: number } | Array<{ label?: string; score?: number }> : null;
+      const predictions = Array.isArray(result) ? result : [];
+      const blockedLabels = /nsfw|porn|hentai|sexy|explicit|adult/i;
+      const blocked = predictions.some((item) => blockedLabels.test(item.label ?? '') && Number(item.score ?? 0) >= 0.55);
+      const allowed = !blocked && (Array.isArray(result) ? predictions.length > 0 : result?.allowed === true);
+      if (!allowed) return NextResponse.json({ error: 'Não foi possível usar esta imagem.' }, { status: 400 });
     }
     const filePath = `${campaignId ? `campaigns/${campaignId}` : user.id}/${kind}-${crypto.randomUUID()}.webp`;
     const { error: uploadError } = await admin.storage.from('avatars-clean').upload(filePath, safeImage, {
