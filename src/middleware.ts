@@ -8,5 +8,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/primeira-missao', '/for-you', '/avaliar', '/publicar', '/conta'],
+  matcher: ['/primeira-missao', '/for-you', '/avaliar', '/publicar', '/conta', '/sobre', '/termos', '/privacidade', '/ajuda'],
 };

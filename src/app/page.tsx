@@ -11,6 +11,7 @@ type CampaignData = { id: string; kind: 'normal' | 'seed' | 'featured' | 'tutori
 
 const viewPaths: Record<View, string> = { tutorial: '/primeira-missao', feed: '/for-you', evaluate: '/avaliar', publish: '/publicar', profile: '/conta' };
 const pathViews: Record<string, View> = Object.fromEntries(Object.entries(viewPaths).map(([view, path]) => [path, view as View]));
+const infoPages = new Set(['/sobre', '/termos', '/privacidade', '/ajuda']);
 
 export default function HomePage() {
   const [authLoading, setAuthLoading] = useState(true);
@@ -285,6 +286,7 @@ export default function HomePage() {
           : 'For You';
 
   if (authLoading) return <main className="auth-shell"><div className="auth-card"><Brand /><p>A preparar o PULSO…</p></div></main>;
+  if (typeof window !== 'undefined' && infoPages.has(window.location.pathname)) return <InfoPage path={window.location.pathname} />;
   if (!user) return <AuthScreen />;
 
   return (
@@ -482,8 +484,14 @@ function AuthScreen() {
         <button className="secondary-action" type="button" onClick={() => { setCode(''); setStep('email'); setStatus(''); }} disabled={sending}>Alterar e-mail</button>
       </form>}
       {status && <p className="notice" role="status">{status}</p>}
+      <nav className="legal-links" aria-label="Informações"><a href="/sobre">Sobre</a><a href="/ajuda">Ajuda</a><a href="/termos">Termos</a><a href="/privacidade">Privacidade</a></nav>
     </section>
   </main>;
+}
+
+function InfoPage({ path }: { path: string }) {
+  const content = path === '/sobre' ? { title: 'Sobre o PULSO', sections: [['Uma comunidade de feedback', 'O PULSO ajuda criadores a melhorar a apresentação dos seus perfis no TikTok através de avaliações honestas e úteis.'], ['Como funciona', 'Cada pessoa pode conhecer perfis, enviar feedback e ganhar pontos para pedir feedback sobre a própria presença no TikTok.']] } : path === '/ajuda' ? { title: 'Ajuda e segurança', sections: [['Imagens', 'Aceitamos apenas imagens comuns. Não envie nudez, violência, malware ou conteúdo ilegal. Os arquivos são normalizados e armazenados de forma privada.'], ['Feedback justo', 'Avalie o perfil que abriu, aguarde o período de análise e escreva uma sugestão respeitosa. Não use automações nem tente manipular pontos.']] } : path === '/termos' ? { title: 'Termos de uso', sections: [['Uso responsável', 'Ao utilizar o PULSO, você concorda em fornecer informações verdadeiras, respeitar outros criadores e usar o serviço apenas para feedback legítimo.'], ['Moderação', 'Podemos pausar campanhas, remover conteúdo ou suspender contas que violem estas regras, tentem fraudar pontos ou enviem conteúdo proibido.'], ['TikTok', 'O PULSO não é afiliado ao TikTok. Links externos abrem diretamente no serviço do TikTok e estão sujeitos aos termos e políticas dessa plataforma.']] } : { title: 'Política de privacidade', sections: [['Dados que guardamos', 'Guardamos o e-mail usado para autenticação, dados do perfil, campanhas, missões, feedbacks e imagens enviadas.'], ['Finalidade e segurança', 'Usamos esses dados para operar a comunidade, evitar fraude e exibir campanhas. Imagens ficam em armazenamento privado com URLs temporárias.'], ['Seus direitos', 'Você pode solicitar correção ou eliminação dos seus dados através do suporte do projeto. Nunca pedimos a sua palavra-passe do TikTok.']] };
+  return <main className="info-shell"><section className="info-card"><Brand /><a className="back-link" href="/">← Voltar ao PULSO</a><div className="eyebrow"><span className="live-dot" /> PULSO</div><h1>{content.title}</h1>{content.sections.map(([heading, text]) => <article key={heading}><h2>{heading}</h2><p>{text}</p></article>)}<nav className="legal-links"><a href="/sobre">Sobre</a><a href="/ajuda">Ajuda</a><a href="/termos">Termos</a><a href="/privacidade">Privacidade</a></nav></section></main>;
 }
 
 function Brand() {
