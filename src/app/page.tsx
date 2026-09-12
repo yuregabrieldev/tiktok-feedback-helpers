@@ -7,7 +7,7 @@ import { createBrowserSupabaseClient, hasSupabaseConfig } from '@/lib/supabase/b
 type View = 'tutorial' | 'feed' | 'evaluate' | 'publish' | 'profile';
 type MissionKind = 'tutorial' | 'standard';
 type ProfileData = { display_name: string; username: string; tiktok_profile_url: string; niche: string; bio: string; avatar_path?: string | null; tiktok_screenshot_path?: string | null; tutorial_completed_at?: string | null; is_admin?: boolean };
-type CampaignData = { id: string; kind: 'normal' | 'seed' | 'featured' | 'tutorial'; status?: string; niche: string | null; prompt: string; title: string; creator_id: string; creator: { display_name: string; username: string; tiktok_profile_url: string | null; niche: string | null; bio: string } | null; feedback_completed: number; feedback_target: number };
+type CampaignData = { id: string; kind: 'normal' | 'seed' | 'featured' | 'tutorial'; status?: string; niche: string | null; prompt: string; title: string; creator_id: string; creator: { display_name: string; username: string; tiktok_profile_url: string | null; niche: string | null; bio: string; avatarUrl?: string | null; screenshotUrl?: string | null } | null; feedback_completed: number; feedback_target: number };
 
 export default function HomePage() {
   const [authLoading, setAuthLoading] = useState(true);
@@ -49,7 +49,7 @@ export default function HomePage() {
           supabase.from('profiles').select('display_name,username,tiktok_profile_url,niche,bio,avatar_path,tiktok_screenshot_path,tutorial_completed_at,is_admin').eq('id', data.session.user.id).maybeSingle(),
           supabase.rpc('current_points'),
         ]);
-        if (profileRow) { setProfile(profileRow as ProfileData); setProfileDraft(profileRow as ProfileData); const loadedProfile = profileRow as ProfileData; setView(loadedProfile.is_admin || loadedProfile.tutorial_completed_at ? 'feed' : 'tutorial'); if (loadedProfile.avatar_path) void fetch('/api/profile/avatar?kind=avatar').then((response) => response.ok ? response.json() : null).then((result) => result?.url && setAvatarUrl(result.url)); if (loadedProfile.tiktok_screenshot_path) void fetch('/api/profile/avatar?kind=screenshot').then((response) => response.ok ? response.json() : null).then((result) => result?.url && setScreenshotUrl(result.url)); }
+        if (profileRow) { setProfile(profileRow as ProfileData); setProfileDraft(profileRow as ProfileData); const loadedProfile = profileRow as ProfileData; const authHeaders = data.session.access_token ? { Authorization: `Bearer ${data.session.access_token}` } : undefined; setView(loadedProfile.is_admin || loadedProfile.tutorial_completed_at ? 'feed' : 'tutorial'); if (loadedProfile.avatar_path) void fetch('/api/profile/avatar?kind=avatar', { headers: authHeaders }).then((response) => response.ok ? response.json() : null).then((result) => result?.url && setAvatarUrl(result.url)); if (loadedProfile.tiktok_screenshot_path) void fetch('/api/profile/avatar?kind=screenshot', { headers: authHeaders }).then((response) => response.ok ? response.json() : null).then((result) => result?.url && setScreenshotUrl(result.url)); }
         if (typeof pointTotal === 'number') setPoints(pointTotal);
         await loadCommunityData(data.session.user.id);
       }
@@ -62,6 +62,8 @@ export default function HomePage() {
   async function loadCommunityData(userId: string) {
     setDataLoading(true);
     const supabase = createBrowserSupabaseClient();
+    const { data: sessionState } = await supabase.auth.getSession();
+    const authHeaders = sessionState.session?.access_token ? { Authorization: `Bearer ${sessionState.session.access_token}` } : undefined;
     const { data: viewer } = await supabase.from('profiles').select('is_admin').eq('id', userId).maybeSingle();
     let campaignQuery = supabase.from('campaigns').select('id,kind,status,niche,prompt,title,creator_id,feedback_completed,feedback_target,creator:profiles!campaigns_creator_id_fkey(display_name,username,tiktok_profile_url,niche,bio)').order('created_at', { ascending: false });
     if (!viewer?.is_admin) campaignQuery = campaignQuery.eq('status', 'active');
@@ -75,10 +77,21 @@ export default function HomePage() {
     const allCampaigns = (rows ?? []) as unknown as CampaignData[];
     const available = allCampaigns.filter((row) => row.status === 'active' && row.creator_id !== userId && !completed.has(row.id) && row.feedback_completed < row.feedback_target);
     if (viewer?.is_admin) setAdminCampaigns(allCampaigns);
-    setCampaigns(available);
-    setSelectedCampaign((current) => current && available.some((item) => item.id === current.id) ? current : available[0] ?? null);
+    const withMedia = await Promise.all(available.map(async (item) => {
+      if (!item.creator_id) return item;
+      const mediaResponse = await fetch(`/api/profile/media?profileId=${encodeURIComponent(item.creator_id)}`, { headers: authHeaders });
+      const media = mediaResponse.ok ? await mediaResponse.json() : {};
+      return { ...item, creator: item.creator ? { ...item.creator, avatarUrl: media.avatarUrl, screenshotUrl: media.screenshotUrl } : item.creator };
+    }));
+    setCampaigns(withMedia);
+    setSelectedCampaign((current) => current && withMedia.some((item) => item.id === current.id) ? current : withMedia[0] ?? null);
     setReceivedCount((receivedRows ?? []).length);
     setSentCount((sentRows ?? []).length);
+    const { data: openMission } = await supabase.from('missions').select('id,campaign_id,status,campaigns!inner(id,kind,status,niche,prompt,title,creator_id,feedback_completed,feedback_target,creator:profiles!campaigns_creator_id_fkey(display_name,username,tiktok_profile_url,niche,bio))').eq('evaluator_id', userId).in('status', ['started', 'ready_for_feedback']).maybeSingle();
+    if (openMission?.id) {
+      const missionCampaign = openMission.campaigns as unknown as CampaignData;
+      setMissionId(openMission.id); setActiveMission(true); setSelectedCampaign(missionCampaign); setMissionKind(missionCampaign.kind === 'tutorial' ? 'tutorial' : 'standard'); setView('evaluate');
+    }
     setDataLoading(false);
   }
 
@@ -91,13 +104,13 @@ export default function HomePage() {
     if (!item) { setNotice('Não há campanhas disponíveis neste momento.'); return; }
     const supabase = createBrowserSupabaseClient();
     const { data, error } = await supabase.rpc('start_mission', { p_campaign_id: item.id });
-    if (error || !data?.[0]) { setNotice(error?.message.includes('already_completed') ? 'Você já avaliou esta campanha.' : 'Não foi possível iniciar esta missão.'); return; }
+    if (error || !data?.[0]) { const reason = error?.message || ''; setNotice(reason.includes('mission_in_progress') ? 'Você já tem uma missão aberta. Conclua-a antes de começar outra.' : reason.includes('campaign_full') ? 'Esta missão já recebeu todos os feedbacks.' : reason.includes('profile_link_unavailable') ? 'O perfil ainda não tem um link TikTok válido.' : reason.includes('already_completed') ? 'Você já avaliou esta campanha.' : `Não foi possível iniciar esta missão${reason ? `: ${reason}` : '.'}`); return; }
     setMissionId(data[0].mission_id);
     setSelectedCampaign(item);
     setActiveMission(true);
     setMissionKind(kind);
     setNotice('Missão iniciada. Ao voltar do TikTok, envie a sua avaliação.');
-    window.open(data[0].tiktok_profile_url, '_blank', 'noopener,noreferrer');
+    window.location.assign(data[0].tiktok_profile_url);
     setView('evaluate');
   }
 
@@ -164,7 +177,9 @@ export default function HomePage() {
   async function uploadProfileImage(event: ChangeEvent<HTMLInputElement>, kind: 'avatar' | 'screenshot') {
     const file = event.target.files?.[0]; if (!file) return;
     const body = new FormData(); body.set('file', file); body.set('kind', kind);
-    const response = await fetch('/api/profile/avatar', { method: 'POST', body });
+    const browser = createBrowserSupabaseClient();
+    const { data: sessionState } = await browser.auth.getSession();
+    const response = await fetch('/api/profile/avatar', { method: 'POST', headers: sessionState.session?.access_token ? { Authorization: `Bearer ${sessionState.session.access_token}` } : undefined, body });
     const result = await response.json().catch(() => ({}));
     if (!response.ok) { setNotice(result.error || 'Não foi possível processar a imagem.'); return; }
     if (kind === 'avatar') setAvatarUrl(result.url ?? null); else setScreenshotUrl(result.url ?? null);
@@ -228,7 +243,7 @@ export default function HomePage() {
         {view === 'evaluate' && (
           <form className="evaluation" onSubmit={submitFeedback}>
             <span className="mission-tag">MISSÃO EM AVALIAÇÃO</span>
-            <div className="mini-profile"><Avatar initials={(selectedCampaign?.creator?.display_name || selectedCampaign?.creator?.username || '?').slice(0, 1).toUpperCase()} /><div><b>@{selectedCampaign?.creator?.username || 'perfil'}</b><span>{selectedCampaign?.niche || 'COMUNIDADE'}</span></div></div>
+            <div className="mini-profile"><Avatar initials={(selectedCampaign?.creator?.display_name || selectedCampaign?.creator?.username || '?').slice(0, 1).toUpperCase()} src={selectedCampaign?.creator?.avatarUrl} /><div><b>@{selectedCampaign?.creator?.username || 'perfil'}</b><span>{selectedCampaign?.niche || 'COMUNIDADE'}</span></div></div>
             <h2>Como foi conhecer este perfil?</h2>
             <fieldset>
               <legend>A bio deixa claro o nicho?</legend>
@@ -388,8 +403,9 @@ function CampaignCard({ campaign, admin = false, onAction }: { campaign: Campaig
   const creator = campaign.creator;
   return <article className="campaign-card">
     <div className="card-top"><span>{campaign.kind === 'tutorial' ? 'TUTORIAL · ADMIN' : `PULSO · ${campaign.id.slice(0, 4).toUpperCase()}`}</span><span>{campaign.niche || creator?.niche || 'GERAL'}</span></div>
-    <div className="creator"><Avatar initials={(creator?.display_name || creator?.username || '?').slice(0, 1).toUpperCase()} /><div><b>@{creator?.username || 'perfil'}</b><span>{creator?.display_name || 'Criador'}</span></div></div>
+    <div className="creator"><Avatar initials={(creator?.display_name || creator?.username || '?').slice(0, 1).toUpperCase()} src={creator?.avatarUrl} /><div><b>@{creator?.username || 'perfil'}</b><span>{creator?.display_name || 'Criador'}</span></div></div>
     <p className="creator-description">{creator?.bio || 'Peça uma leitura honesta de alguém da comunidade.'}</p>
+    {creator?.screenshotUrl && <img className="profile-proof" src={creator.screenshotUrl} alt="Screenshot do perfil TikTok" />}
     <div className="request"><span>PEDIDO DA VEZ</span><p>“{campaign.prompt}”</p></div>
     <button className="primary-action" onClick={onAction}>Conhecer e avaliar {!admin && <span>+1</span>}</button>
   </article>;
