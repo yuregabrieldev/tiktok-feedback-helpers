@@ -541,7 +541,7 @@ function CampaignCard({ campaign, admin = false, owner = false, onAction, onDele
   return <article className="campaign-card">
     <div className="card-top"><span>{campaign.kind === 'tutorial' ? 'TUTORIAL · ADMIN' : `PULSO · ${campaign.id.slice(0, 4).toUpperCase()}`}</span><span>{campaign.niche || creator?.niche || 'GERAL'}</span></div>
     <div className="creator"><Avatar initials={(creator?.display_name || creator?.username || '?').slice(0, 1).toUpperCase()} src={creator?.avatarUrl} /><div><b>@{creator?.username || 'perfil'}</b><span>{creator?.display_name || 'Criador'}</span></div></div>
-    <p className="creator-description">{creator?.bio?.trim() || 'Este criador ainda não adicionou uma bio.'}</p>
+    <p className="creator-description">@{creator?.username || 'este criador'} pediu uma leitura honesta de alguém da comunidade.</p>
     {creator?.screenshotUrl && <img className="profile-proof" src={creator.screenshotUrl} alt="Screenshot do perfil TikTok" />}
     <div className="request"><span>PEDIDO DA VEZ</span><p>“{campaign.prompt}”</p></div>
     {(!admin || campaign.kind === 'tutorial') && <button className="primary-action" onClick={onAction} disabled={owner}>{owner ? 'A sua campanha' : campaign.kind === 'tutorial' ? 'Avaliar para desbloquear o PULSO' : <>Conhecer e avaliar {!admin && <span>+1</span>}</>}</button>}
