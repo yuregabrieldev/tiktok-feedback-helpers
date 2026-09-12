@@ -239,7 +239,7 @@ export default function HomePage() {
     const supabase = createBrowserSupabaseClient();
     const { error } = await supabase.rpc(profile.is_admin ? 'create_featured_campaign' : 'create_normal_campaign', { p_prompt: campaignPrompt.trim(), p_niche: profile.niche || 'GERAL', p_feedback_target: 1 });
     setPublishing(false);
-    if (error) { setNotice(error.message.includes('insufficient_points') ? 'Você não tem pontos suficientes.' : error.message.includes('profile_required') ? 'Atualize o seu perfil antes de publicar a primeira campanha.' : 'Não foi possível lançar a campanha agora.'); return; }
+    if (error) { setNotice(error.message.includes('insufficient_points') ? 'Você não tem pontos suficientes.' : error.message.includes('profile_required') ? 'Atualize o seu perfil antes de publicar a primeira campanha.' : error.message.includes('campaign_cooldown') ? 'Aguarde 30 minutos entre uma campanha e outra.' : 'Não foi possível lançar a campanha agora.'); return; }
     if (!profile.is_admin) setPoints((value) => value - 1); setCampaignPrompt(''); setNotice('Campanha lançada. Ela já está disponível no For You.'); navigateTo('feed');
   }
 
