@@ -113,8 +113,8 @@ export default function HomePage() {
     const supabase = createBrowserSupabaseClient();
     const { data: sessionState } = await supabase.auth.getSession();
     const authHeaders = sessionState.session?.access_token ? { Authorization: `Bearer ${sessionState.session.access_token}` } : undefined;
-    const { data: viewerRow } = await supabase.from('profiles').select('is_admin').eq('id', userId).maybeSingle();
-    const viewer = viewerRow as { is_admin?: boolean } | null;
+    const { data: viewerRow } = await supabase.from('profiles').select('is_admin,tutorial_completed_at').eq('id', userId).maybeSingle();
+    const viewer = viewerRow as { is_admin?: boolean; tutorial_completed_at?: string | null } | null;
     let campaignQuery = supabase.from('campaigns').select('id,kind,status,niche,prompt,title,creator_id,feedback_completed,feedback_target,campaign_display_name,campaign_username,campaign_tiktok_profile_url,campaign_bio,creator:profiles!campaigns_creator_id_fkey(display_name,username,tiktok_profile_url,niche,bio)').order('created_at', { ascending: false });
     if (!viewer?.is_admin) campaignQuery = campaignQuery.eq('status', 'active');
     const [{ data: rows }, { data: feedbackRows }, { data: receivedRows }, { data: sentRows }] = await Promise.all([
@@ -125,7 +125,9 @@ export default function HomePage() {
     ]);
     const completed = new Set((feedbackRows ?? []).map((row: { campaign_id: string }) => row.campaign_id));
     const allCampaigns = (rows ?? []) as unknown as CampaignData[];
-    const available = viewer?.is_admin ? allCampaigns.filter((row) => row.status !== 'removed') : allCampaigns.filter((row) => row.status === 'active' && (row.kind === 'tutorial' || ((!completed.has(row.id) || row.creator_id === userId) && row.feedback_completed < row.feedback_target)));
+    const available = viewer?.is_admin
+      ? allCampaigns.filter((row) => row.status !== 'removed')
+      : allCampaigns.filter((row) => row.status === 'active' && (row.kind === 'tutorial' ? !viewer?.tutorial_completed_at : ((!completed.has(row.id) || row.creator_id === userId) && row.feedback_completed < row.feedback_target)));
     if (viewer?.is_admin) setAdminCampaigns(allCampaigns.filter((row) => row.kind === 'tutorial' || row.kind === 'featured'));
     const withMedia = await Promise.all(available.map(async (item) => {
       if (!item.creator_id) return item;
@@ -134,7 +136,9 @@ export default function HomePage() {
       return { ...item, creator: item.creator ? { ...item.creator, display_name: item.campaign_display_name || item.creator.display_name, username: item.campaign_username || item.creator.username, tiktok_profile_url: item.campaign_tiktok_profile_url || item.creator.tiktok_profile_url, bio: item.campaign_bio || item.creator.bio, avatarUrl: media.avatarUrl, screenshotUrl: media.screenshotUrl } : item.creator };
     }));
     setCampaigns(withMedia);
-    setSelectedCampaign((current) => current && withMedia.some((item) => item.id === current.id) ? current : withMedia.find((item) => item.creator_id !== userId) ?? withMedia[0] ?? null);
+    setSelectedCampaign((current) => current && current.kind !== 'tutorial' && withMedia.some((item) => item.id === current.id)
+      ? current
+      : withMedia.find((item) => item.kind !== 'tutorial' && item.creator_id !== userId) ?? withMedia.find((item) => item.kind !== 'tutorial') ?? null);
     setReceivedCount((receivedRows ?? []).length);
     setSentCount((sentRows ?? []).length);
     const { data: openMissionRow } = await supabase.from('missions').select('id,campaign_id,status,expires_at,campaigns!inner(id,kind,status,niche,prompt,title,creator_id,feedback_completed,feedback_target,creator:profiles!campaigns_creator_id_fkey(display_name,username,tiktok_profile_url,niche,bio))').eq('evaluator_id', userId).in('status', ['started', 'ready_for_feedback']).gt('expires_at', new Date().toISOString()).maybeSingle();
@@ -299,7 +303,8 @@ export default function HomePage() {
         ? 'Publicar campanha'
         : view === 'profile'
           ? 'Minha conta'
-          : 'For You';
+    : 'For You';
+  const feedCampaigns = campaigns.filter((item) => item.kind !== 'tutorial');
 
   if (authLoading) return <main className="auth-shell"><div className="auth-card"><Brand /><p>A preparar o PULSO…</p></div></main>;
   if (typeof window !== 'undefined' && infoPages.has(window.location.pathname)) return <InfoPage path={window.location.pathname} />;
@@ -336,7 +341,7 @@ export default function HomePage() {
               <span>PRONTO PARA PUBLICAR</span>
               <b>{profile.is_admin ? 'Conta administrativa' : `${points} ponto${points === 1 ? '' : 's'} disponível${points === 1 ? '' : 'is'}`}</b>
             </section>
-            {dataLoading ? <p className="empty-state">A carregar campanhas…</p> : profile.is_admin ? <div className="campaign-list">{campaigns.map((item) => <CampaignCard key={item.id} campaign={item} admin onAction={() => void beginMission('standard', item)} onDelete={() => void deleteCampaign(item.id)} />)}</div> : <CampaignCard campaign={selectedCampaign} owner={selectedCampaign?.creator_id === user.id} onAction={() => void beginMission('standard')} />}
+            {dataLoading ? <p className="empty-state">A carregar campanhas…</p> : profile.is_admin ? <div className="campaign-list">{feedCampaigns.map((item) => <CampaignCard key={item.id} campaign={item} admin onAction={() => void beginMission('standard', item)} onDelete={() => void deleteCampaign(item.id)} />)}</div> : <CampaignCard campaign={feedCampaigns.find((item) => item.id === selectedCampaign?.id) ?? feedCampaigns[0] ?? null} owner={selectedCampaign?.creator_id === user.id} onAction={() => void beginMission('standard')} />}
             <section className="feed-next" aria-label="Próximas campanhas">
               <span>PRÓXIMOS PULSOS</span>
               <p>O feed será preenchido com campanhas que ainda não avaliou.</p>
