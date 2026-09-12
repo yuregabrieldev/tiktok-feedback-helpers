@@ -196,7 +196,7 @@ export default function HomePage() {
     event.preventDefault();
     if (activeMission) { setNotice('Termine a missão aberta antes de publicar uma campanha.'); navigateTo('evaluate'); return; }
     if (!profile.is_admin && points < 1) { setNotice('É preciso ter pelo menos 1 ponto para lançar uma campanha.'); return; }
-    if (!profile.is_admin && (!profile.display_name.trim() || !profile.username.trim() || !profile.tiktok_profile_url || !profile.niche.trim() || !profile.bio.trim())) { setNotice('Atualize o seu perfil antes de publicar a primeira campanha.'); navigateTo('profile'); return; }
+    if (!profile.is_admin && (!profile.display_name.trim() || !profile.username.trim() || !profile.tiktok_profile_url || !profile.niche.trim() || !profile.avatar_path || !profile.tiktok_screenshot_path)) { setNotice('Atualize o seu perfil antes de publicar a primeira campanha.'); navigateTo('profile'); return; }
     if (campaignPrompt.trim().length < 12) { setNotice('Escreva uma pergunta com pelo menos 12 caracteres.'); return; }
     setPublishing(true);
     const supabase = createBrowserSupabaseClient();
@@ -219,6 +219,10 @@ export default function HomePage() {
       niche: profileDraft.niche.trim(),
       bio: profileDraft.bio.trim(),
     };
+    if (!editableProfile.display_name || !editableProfile.username || !editableProfile.tiktok_profile_url || !editableProfile.niche.trim() || !profileDraft.avatar_path || !profileDraft.tiktok_screenshot_path) {
+      setNotice('Preencha todos os campos e adicione a foto e o screenshot do TikTok. A bio é opcional.');
+      return;
+    }
     const { error } = await supabase.from('profiles').update(editableProfile).eq('id', user.id);
     if (error) { setNotice('Não foi possível guardar o perfil. Verifique o link do TikTok.'); return; }
     setProfile((current) => ({ ...current, ...editableProfile }));
@@ -349,12 +353,12 @@ export default function HomePage() {
           <section className="account-card">
             <div className="account-head"><div className="avatar-edit-wrap"><Avatar initials={(profile.display_name || 'Y').slice(0, 1).toUpperCase()} src={avatarUrl} large />{profileEditing && <label className="avatar-edit" title="Alterar foto de perfil"><span aria-hidden="true">✎</span><input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" onChange={(event) => void uploadProfileImage(event, 'avatar')} /></label>}</div><div><span>O SEU PERFIL</span><h2>{profile.username ? `@${profile.username.replace(/^@/, '')}` : '@o_seu_tiktok'}</h2><p>{profile.tiktok_profile_url || 'Adicione o seu link do TikTok para começar.'}</p></div></div>
             {profileEditing ? <form className="profile-form" onSubmit={saveProfile}>
-              <label htmlFor="profile-name">Nome<input id="profile-name" value={profileDraft.display_name} onChange={(event) => setProfileDraft({ ...profileDraft, display_name: event.target.value })} /></label>
+              <label htmlFor="profile-name">Nome<input id="profile-name" value={profileDraft.display_name} onChange={(event) => setProfileDraft({ ...profileDraft, display_name: event.target.value })} required /></label>
               <label htmlFor="profile-username">@ do TikTok<input id="profile-username" value={profileDraft.username} onChange={(event) => setProfileDraft({ ...profileDraft, username: event.target.value.replace(/^@/, '') })} placeholder="o_seu_tiktok" required /></label>
               <label htmlFor="profile-url">Link do perfil TikTok<input id="profile-url" type="url" pattern="https://(www\\.)?tiktok\\.com/@[A-Za-z0-9._-]+/?" value={profileDraft.tiktok_profile_url ?? ''} onChange={(event) => setProfileDraft({ ...profileDraft, tiktok_profile_url: event.target.value })} placeholder="https://www.tiktok.com/@o_seu_tiktok" required /></label>
-              <label htmlFor="profile-niche">Nicho<input id="profile-niche" value={profileDraft.niche} onChange={(event) => setProfileDraft({ ...profileDraft, niche: event.target.value })} placeholder="Ex.: receitas" /></label>
+              <label htmlFor="profile-niche">Nicho<input id="profile-niche" value={profileDraft.niche} onChange={(event) => setProfileDraft({ ...profileDraft, niche: event.target.value })} placeholder="Ex.: receitas" required /></label>
               <label htmlFor="profile-bio">Bio<textarea id="profile-bio" value={profileDraft.bio} onChange={(event) => setProfileDraft({ ...profileDraft, bio: event.target.value })} maxLength={220} /></label>
-              <div className="screenshot-field"><label className="upload-label">Screenshot do perfil TikTok<input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" onChange={(event) => void uploadProfileImage(event, 'screenshot')} /></label><button type="button" className="help-dot" title="Envie uma captura onde apareçam o nome e o @ do seu perfil no TikTok." aria-label="O que é o screenshot do perfil?">?</button><small>Mostra que o link pertence a si. O @ deve estar visível.</small></div>
+              <div className="screenshot-field"><label className="upload-label">Screenshot do perfil TikTok<input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" required={!profileDraft.tiktok_screenshot_path} onChange={(event) => void uploadProfileImage(event, 'screenshot')} /></label><button type="button" className="help-dot" title="Envie uma captura onde apareçam o nome e o @ do seu perfil no TikTok." aria-label="O que é o screenshot do perfil?">?</button><small>Mostra que o link pertence a si. O @ deve estar visível.</small></div>
               <button className="primary-action" type="submit">Guardar perfil</button>
               <button className="secondary-action" type="button" onClick={() => setProfileEditing(false)}>Cancelar</button>
             </form> : <button className="secondary-action edit-profile" onClick={() => { setProfileDraft(profile); setProfileEditing(true); }}>Editar perfil</button>}

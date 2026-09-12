@@ -22,7 +22,8 @@ begin
     char_length(trim(coalesce(v_profile.username, ''))) = 0 or
     v_profile.tiktok_profile_url is null or
     char_length(trim(coalesce(v_profile.niche, ''))) = 0 or
-    char_length(trim(coalesce(v_profile.bio, ''))) = 0
+    v_profile.avatar_path is null or
+    v_profile.tiktok_screenshot_path is null
   ) then raise exception 'profile_required'; end if;
   if p_feedback_target not in (1, 3, 5) then raise exception 'invalid_target'; end if;
   if char_length(trim(p_prompt)) < 12 or char_length(trim(p_prompt)) > 220 then raise exception 'invalid_prompt'; end if;
@@ -44,3 +45,27 @@ $$;
 
 revoke all on function public.create_normal_campaign(text, text, smallint) from public;
 grant execute on function public.create_normal_campaign(text, text, smallint) to authenticated;
+
+-- Defense in depth for callers that bypass the RPC implementation.
+create or replace function public.enforce_complete_profile_for_campaign()
+returns trigger language plpgsql security definer set search_path = '' as $$
+begin
+  if not coalesce((select is_admin from public.profiles where id = auth.uid()), false)
+     and not exists (
+       select 1 from public.profiles
+       where id = auth.uid() and is_suspended = false
+         and char_length(trim(display_name)) > 0
+         and char_length(trim(username)) > 0
+         and tiktok_profile_url is not null
+         and char_length(trim(coalesce(niche, ''))) > 0
+         and avatar_path is not null
+         and tiktok_screenshot_path is not null
+     ) then raise exception 'profile_required';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists campaigns_require_profile on public.campaigns;
+create trigger campaigns_require_profile before insert on public.campaigns
+for each row when (new.kind = 'normal') execute function public.enforce_complete_profile_for_campaign();
