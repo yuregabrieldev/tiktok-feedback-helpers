@@ -132,6 +132,8 @@ export default function HomePage() {
     if (activeMission) {
       setNotice('Termine a missão aberta antes de iniciar outra.');
       navigateTo('evaluate');
+      const openUrl = item?.creator?.tiktok_profile_url;
+      if (openUrl) window.open(openUrl, '_blank', 'noopener,noreferrer');
       return;
     }
     if (!item) { setNotice('Não há campanhas disponíveis neste momento.'); return; }
