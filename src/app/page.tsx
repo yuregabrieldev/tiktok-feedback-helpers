@@ -71,8 +71,9 @@ export default function HomePage() {
           supabase.rpc('current_points'),
         ]);
         if (profileRow) { setProfile(profileRow as ProfileData); setProfileDraft(profileRow as ProfileData); const loadedProfile = profileRow as ProfileData; const authHeaders = data.session.access_token ? { Authorization: `Bearer ${data.session.access_token}` } : undefined; navigateTo(loadedProfile.is_admin || loadedProfile.tutorial_completed_at ? 'feed' : 'tutorial', true); if (loadedProfile.avatar_path) void fetch('/api/profile/avatar?kind=avatar', { headers: authHeaders }).then((response) => response.ok ? response.json() : null).then((result) => result?.url && setAvatarUrl(result.url)); if (loadedProfile.tiktok_screenshot_path) void fetch('/api/profile/avatar?kind=screenshot', { headers: authHeaders }).then((response) => response.ok ? response.json() : null).then((result) => result?.url && setScreenshotUrl(result.url)); }
-        if (typeof pointTotal === 'number' && !loadedProfile.is_admin) setPoints(pointTotal);
-        if (loadedProfile.is_admin) setPoints(0);
+        const isAdmin = Boolean((profileRow as ProfileData | null)?.is_admin);
+        if (typeof pointTotal === 'number' && !isAdmin) setPoints(pointTotal);
+        if (isAdmin) setPoints(0);
         await loadCommunityData(data.session.user.id);
       }
       setAuthLoading(false);
