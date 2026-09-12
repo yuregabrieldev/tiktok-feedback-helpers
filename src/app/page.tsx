@@ -141,7 +141,7 @@ export default function HomePage() {
     const allCampaigns = (campaignResult.data ?? []) as unknown as CampaignData[];
     const available = viewer?.is_admin
       ? allCampaigns.filter((row) => row.status !== 'removed')
-      : allCampaigns.filter((row) => row.status === 'active' && (row.kind === 'tutorial' ? !viewer?.tutorial_completed_at : ((!completed.has(row.id) || row.creator_id === userId) && row.feedback_completed < row.feedback_target)));
+      : allCampaigns.filter((row) => row.status === 'active' && (row.kind === 'tutorial' ? !viewer?.tutorial_completed_at : (!completed.has(row.id) || row.creator_id === userId)));
     if (viewer?.is_admin) setAdminCampaigns(allCampaigns.filter((row) => row.kind === 'tutorial' || row.kind === 'featured'));
     const withMedia = await Promise.all(available.map(async (item) => {
       if (!item.creator_id) return item;
@@ -192,7 +192,7 @@ export default function HomePage() {
     if (tiktokTab) tiktokTab.opener = null;
     const supabase = createBrowserSupabaseClient();
     const { data, error } = await supabase.rpc('start_mission', { p_campaign_id: item.id });
-    if (error || !data?.[0]) { tiktokTab?.close(); const reason = error?.message || ''; setNotice(reason.includes('mission_in_progress') ? 'Você já tem uma missão aberta. Conclua-a antes de começar outra.' : reason.includes('campaign_full') ? 'Esta missão já recebeu todos os feedbacks.' : reason.includes('profile_link_unavailable') ? 'O perfil ainda não tem um link TikTok válido.' : reason.includes('already_completed') ? 'Você já avaliou esta campanha.' : `Não foi possível iniciar esta missão${reason ? `: ${reason}` : '.'}`); return; }
+    if (error || !data?.[0]) { tiktokTab?.close(); const reason = error?.message || ''; setNotice(reason.includes('mission_in_progress') ? 'Você já tem uma missão aberta. Conclua-a antes de começar outra.' : reason.includes('profile_link_unavailable') ? 'O perfil ainda não tem um link TikTok válido.' : reason.includes('already_completed') ? 'Você já avaliou esta campanha.' : `Não foi possível iniciar esta missão${reason ? `: ${reason}` : '.'}`); return; }
     setMissionId(data[0].mission_id);
     setSelectedCampaign(item);
     setActiveMission(true);
