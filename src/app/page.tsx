@@ -112,7 +112,7 @@ export default function HomePage() {
     const completed = new Set((feedbackRows ?? []).map((row: { campaign_id: string }) => row.campaign_id));
     const allCampaigns = (rows ?? []) as unknown as CampaignData[];
     const available = viewer?.is_admin ? allCampaigns.filter((row) => row.status !== 'removed') : allCampaigns.filter((row) => row.status === 'active' && (!completed.has(row.id) || row.creator_id === userId) && row.feedback_completed < row.feedback_target);
-    if (viewer?.is_admin) setAdminCampaigns(allCampaigns);
+    if (viewer?.is_admin) setAdminCampaigns(allCampaigns.filter((row) => row.kind === 'tutorial' || row.kind === 'featured'));
     const withMedia = await Promise.all(available.map(async (item) => {
       if (!item.creator_id) return item;
       const mediaResponse = await fetch(`/api/profile/media?profileId=${encodeURIComponent(item.creator_id)}`, { headers: authHeaders });
@@ -200,7 +200,7 @@ export default function HomePage() {
     if (campaignPrompt.trim().length < 12) { setNotice('Escreva uma pergunta com pelo menos 12 caracteres.'); return; }
     setPublishing(true);
     const supabase = createBrowserSupabaseClient();
-    const { error } = await supabase.rpc('create_normal_campaign', { p_prompt: campaignPrompt.trim(), p_niche: profile.niche || 'GERAL', p_feedback_target: 1 });
+    const { error } = await supabase.rpc(profile.is_admin ? 'create_featured_campaign' : 'create_normal_campaign', { p_prompt: campaignPrompt.trim(), p_niche: profile.niche || 'GERAL', p_feedback_target: 1 });
     setPublishing(false);
     if (error) { setNotice(error.message.includes('insufficient_points') ? 'Você não tem pontos suficientes.' : error.message.includes('profile_required') ? 'Atualize o seu perfil antes de publicar a primeira campanha.' : 'Não foi possível lançar a campanha agora.'); return; }
     if (!profile.is_admin) setPoints((value) => value - 1); setCampaignPrompt(''); setNotice('Campanha lançada. Ela já está disponível no For You.'); navigateTo('feed');
@@ -340,12 +340,12 @@ export default function HomePage() {
 
         {view === 'publish' && (
           <form className="publish-card" onSubmit={launchCampaign}>
-            <span className="mission-tag">A SUA CAMPANHA</span>
+            <span className="mission-tag">{profile.is_admin ? 'DESTAQUE · ADMIN' : 'A SUA CAMPANHA'}</span>
             <h2>Peça feedback sobre algo específico.</h2>
             <label htmlFor="campaign-question">O que quer saber?</label>
             <textarea id="campaign-question" value={campaignPrompt} onChange={(event) => setCampaignPrompt(event.target.value)} placeholder="A minha bio deixa claro o que eu posto?" minLength={12} maxLength={220} required />
             <div className="purchase-row"><span>1 feedback</span><b>1 ponto</b></div>
-            <button className="primary-action" type="submit" disabled={publishing || (!profile.is_admin && points < 1)}>{publishing ? 'A lançar…' : 'Lançar campanha'} {!profile.is_admin && <span>−1</span>}</button>
+            <button className="primary-action" type="submit" disabled={publishing || (!profile.is_admin && points < 1)}>{publishing ? 'A lançar…' : profile.is_admin ? 'Publicar destaque' : 'Lançar campanha'} {!profile.is_admin && <span>−1</span>}</button>
           </form>
         )}
 
@@ -364,7 +364,7 @@ export default function HomePage() {
             </form> : <button className="secondary-action edit-profile" onClick={() => { setProfileDraft(profile); setProfileEditing(true); }}>Editar perfil</button>}
             <div className="stats"><div><b>{profile.is_admin ? '—' : points}</b><span>{profile.is_admin ? 'ADMIN' : 'PONTOS'}</span></div><div><b>{receivedCount}</b><span>RECEBIDOS</span></div><div><b>{sentCount}</b><span>ENVIADAS</span></div></div>
             {profile.is_admin && <section className="admin-panel" aria-labelledby="admin-title">
-              <div className="admin-panel-head"><span>ADMINISTRAÇÃO</span><h2 id="admin-title">Campanhas reais</h2><p>Edite a missão principal e acompanhe todas as campanhas publicadas.</p></div>
+              <div className="admin-panel-head"><span>ADMINISTRAÇÃO</span><h2 id="admin-title">PULSO e destaques</h2><p>Edite a missão principal e os destaques publicados a partir do seu perfil.</p></div>
               {adminCampaigns.length === 0 ? <p className="empty-state">Ainda não existem campanhas para administrar.</p> : adminCampaigns.map((item) => adminEditingId === item.id ? <form className="profile-form admin-edit-form" key={item.id} onSubmit={(event) => void saveAdminCampaign(event, item.id)}>
                 <strong>{item.kind === 'tutorial' ? 'MISSÃO PRINCIPAL' : 'CAMPANHA'}</strong>
                 <label>Título<input value={adminDraft.title} onChange={(event) => setAdminDraft({ ...adminDraft, title: event.target.value })} maxLength={120} required /></label>
