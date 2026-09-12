@@ -196,13 +196,13 @@ export default function HomePage() {
     event.preventDefault();
     if (activeMission) { setNotice('Termine a missão aberta antes de publicar uma campanha.'); navigateTo('evaluate'); return; }
     if (!profile.is_admin && points < 1) { setNotice('É preciso ter pelo menos 1 ponto para lançar uma campanha.'); return; }
-    if (!profile.tiktok_profile_url) { setNotice('Complete o seu perfil com o link do TikTok antes de publicar.'); navigateTo('profile'); return; }
+    if (!profile.is_admin && (!profile.display_name.trim() || !profile.username.trim() || !profile.tiktok_profile_url || !profile.niche.trim() || !profile.bio.trim())) { setNotice('Atualize o seu perfil antes de publicar a primeira campanha.'); navigateTo('profile'); return; }
     if (campaignPrompt.trim().length < 12) { setNotice('Escreva uma pergunta com pelo menos 12 caracteres.'); return; }
     setPublishing(true);
     const supabase = createBrowserSupabaseClient();
     const { error } = await supabase.rpc('create_normal_campaign', { p_prompt: campaignPrompt.trim(), p_niche: profile.niche || 'GERAL', p_feedback_target: 1 });
     setPublishing(false);
-    if (error) { setNotice(error.message.includes('insufficient_points') ? 'Você não tem pontos suficientes.' : 'Não foi possível lançar a campanha agora.'); return; }
+    if (error) { setNotice(error.message.includes('insufficient_points') ? 'Você não tem pontos suficientes.' : error.message.includes('profile_required') ? 'Atualize o seu perfil antes de publicar a primeira campanha.' : 'Não foi possível lançar a campanha agora.'); return; }
     if (!profile.is_admin) setPoints((value) => value - 1); setCampaignPrompt(''); setNotice('Campanha lançada. Ela já está disponível no For You.'); navigateTo('feed');
   }
 
