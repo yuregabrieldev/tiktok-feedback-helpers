@@ -6,6 +6,7 @@ import { createBrowserSupabaseClient, hasSupabaseConfig } from '@/lib/supabase/b
 
 type View = 'tutorial' | 'feed' | 'evaluate' | 'publish' | 'profile';
 type MissionKind = 'tutorial' | 'standard';
+type ReceivedFeedback = { id: string; bio_clarity: 'yes' | 'partly' | 'no'; suggestion: string; created_at: string; campaigns: { title: string | null } | null };
 
 function safeTikTokUrl(value: string | null | undefined) {
   if (!value) return null;
@@ -49,6 +50,7 @@ export default function HomePage() {
   const [missionId, setMissionId] = useState<string | null>(null);
   const [dataLoading, setDataLoading] = useState(false);
   const [receivedCount, setReceivedCount] = useState(0);
+  const [receivedFeedbacks, setReceivedFeedbacks] = useState<ReceivedFeedback[]>([]);
   const [sentCount, setSentCount] = useState(0);
   const [adminCampaigns, setAdminCampaigns] = useState<CampaignData[]>([]);
   const [adminEditingId, setAdminEditingId] = useState<string | null>(null);
@@ -124,7 +126,7 @@ export default function HomePage() {
     const [{ data: rows }, { data: feedbackRows }, { data: receivedRows }, { data: sentRows }] = await Promise.all([
       campaignQuery,
       supabase.from('feedbacks').select('campaign_id').eq('reviewer_id', userId),
-      supabase.from('feedbacks').select('id,campaigns!inner(creator_id)').eq('campaigns.creator_id', userId),
+      supabase.from('feedbacks').select('id,bio_clarity,suggestion,created_at,campaigns!inner(title,creator_id)').eq('campaigns.creator_id', userId).order('created_at', { ascending: false }).limit(50),
       supabase.from('campaigns').select('id').eq('creator_id', userId),
     ]);
     const completed = new Set((feedbackRows ?? []).map((row: { campaign_id: string }) => row.campaign_id));
@@ -144,6 +146,7 @@ export default function HomePage() {
       ? current
       : withMedia.find((item) => item.kind !== 'tutorial' && item.creator_id !== userId) ?? withMedia.find((item) => item.kind !== 'tutorial') ?? null);
     setReceivedCount((receivedRows ?? []).length);
+    setReceivedFeedbacks((receivedRows ?? []) as unknown as ReceivedFeedback[]);
     setSentCount((sentRows ?? []).length);
     const { data: openMissionRow } = await supabase.from('missions').select('id,campaign_id,status,expires_at,campaigns!inner(id,kind,status,niche,prompt,title,creator_id,feedback_completed,feedback_target,creator:profiles!campaigns_creator_id_fkey(display_name,username,tiktok_profile_url,niche,bio))').eq('evaluator_id', userId).in('status', ['started', 'ready_for_feedback']).gt('expires_at', new Date().toISOString()).maybeSingle();
     const openMission = openMissionRow as { id: string; campaigns: CampaignData } | null;
@@ -397,6 +400,7 @@ export default function HomePage() {
               <button className="secondary-action" type="button" onClick={() => setProfileEditing(false)}>Cancelar</button>
             </form> : <button className="secondary-action edit-profile" onClick={() => { setProfileDraft(profile); setProfileEditing(true); }}>Editar perfil</button>}
             <div className="stats"><div><b>{profile.is_admin ? '—' : points}</b><span>{profile.is_admin ? 'ADMIN' : 'PONTOS'}</span></div><div><b>{receivedCount}</b><span>RECEBIDOS</span></div><div><b>{sentCount}</b><span>ENVIADAS</span></div></div>
+            <section className="feedback-inbox" aria-labelledby="feedback-inbox-title"><div className="section-kicker">O QUE A COMUNIDADE DISSE</div><h3 id="feedback-inbox-title">Feedbacks recebidos</h3>{receivedFeedbacks.length === 0 ? <p className="empty-state">Ainda não recebeu feedbacks.</p> : <div className="feedback-list">{receivedFeedbacks.map((item) => <article className="feedback-item" key={item.id}><div><strong>{item.bio_clarity === 'yes' ? 'Sim' : item.bio_clarity === 'partly' ? 'Mais ou menos' : 'Não'}</strong><small>{item.campaigns?.title || 'Campanha'}</small></div><p>{item.suggestion}</p><time dateTime={item.created_at}>{new Intl.DateTimeFormat('pt-PT', { dateStyle: 'medium' }).format(new Date(item.created_at))}</time></article>)}</div>}</section>
             {profile.is_admin && <section className="admin-panel" aria-labelledby="admin-title">
               <div className="admin-panel-head"><span>ADMINISTRAÇÃO</span><h2 id="admin-title">PULSO e destaques</h2><p>Edite a missão principal e os destaques publicados a partir do seu perfil.</p></div>
               {adminCampaigns.length === 0 ? <p className="empty-state">Ainda não existem campanhas para administrar.</p> : adminCampaigns.map((item) => adminEditingId === item.id ? <form className="profile-form admin-edit-form" key={item.id} onSubmit={(event) => void saveAdminCampaign(event, item.id)}>
