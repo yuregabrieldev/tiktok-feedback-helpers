@@ -111,7 +111,7 @@ export default function HomePage() {
     ]);
     const completed = new Set((feedbackRows ?? []).map((row: { campaign_id: string }) => row.campaign_id));
     const allCampaigns = (rows ?? []) as unknown as CampaignData[];
-    const available = viewer?.is_admin ? allCampaigns.filter((row) => row.status !== 'removed') : allCampaigns.filter((row) => row.status === 'active' && row.creator_id !== userId && !completed.has(row.id) && row.feedback_completed < row.feedback_target);
+    const available = viewer?.is_admin ? allCampaigns.filter((row) => row.status !== 'removed') : allCampaigns.filter((row) => row.status === 'active' && (!completed.has(row.id) || row.creator_id === userId) && row.feedback_completed < row.feedback_target);
     if (viewer?.is_admin) setAdminCampaigns(allCampaigns);
     const withMedia = await Promise.all(available.map(async (item) => {
       if (!item.creator_id) return item;
@@ -120,7 +120,7 @@ export default function HomePage() {
       return { ...item, creator: item.creator ? { ...item.creator, avatarUrl: media.avatarUrl, screenshotUrl: media.screenshotUrl } : item.creator };
     }));
     setCampaigns(withMedia);
-    setSelectedCampaign((current) => current && withMedia.some((item) => item.id === current.id) ? current : withMedia[0] ?? null);
+    setSelectedCampaign((current) => current && withMedia.some((item) => item.id === current.id) ? current : withMedia.find((item) => item.creator_id !== userId) ?? withMedia[0] ?? null);
     setReceivedCount((receivedRows ?? []).length);
     setSentCount((sentRows ?? []).length);
     const { data: openMissionRow } = await supabase.from('missions').select('id,campaign_id,status,expires_at,campaigns!inner(id,kind,status,niche,prompt,title,creator_id,feedback_completed,feedback_target,creator:profiles!campaigns_creator_id_fkey(display_name,username,tiktok_profile_url,niche,bio))').eq('evaluator_id', userId).in('status', ['started', 'ready_for_feedback']).gt('expires_at', new Date().toISOString()).maybeSingle();
@@ -311,7 +311,7 @@ export default function HomePage() {
               <span>PRONTO PARA PUBLICAR</span>
               <b>{profile.is_admin ? 'Conta administrativa' : `${points} ponto${points === 1 ? '' : 's'} disponível${points === 1 ? '' : 'is'}`}</b>
             </section>
-            {dataLoading ? <p className="empty-state">A carregar campanhas…</p> : profile.is_admin ? <div className="campaign-list">{campaigns.map((item) => <CampaignCard key={item.id} campaign={item} admin onAction={() => void beginMission('standard', item)} onDelete={() => void deleteCampaign(item.id)} />)}</div> : <CampaignCard campaign={selectedCampaign} onAction={() => void beginMission('standard')} />}
+            {dataLoading ? <p className="empty-state">A carregar campanhas…</p> : profile.is_admin ? <div className="campaign-list">{campaigns.map((item) => <CampaignCard key={item.id} campaign={item} admin onAction={() => void beginMission('standard', item)} onDelete={() => void deleteCampaign(item.id)} />)}</div> : <CampaignCard campaign={selectedCampaign} owner={selectedCampaign?.creator_id === user.id} onAction={() => void beginMission('standard')} />}
             <section className="feed-next" aria-label="Próximas campanhas">
               <span>PRÓXIMOS PULSOS</span>
               <p>O feed será preenchido com campanhas que ainda não avaliou.</p>
@@ -477,7 +477,7 @@ function Brand() {
   return <div className="brand brand-static"><span className="pulse-mark" aria-hidden="true"><i /><i /><i /></span><strong>PULSO</strong><small>TIKTOK FEEDBACK HELPERS</small></div>;
 }
 
-function CampaignCard({ campaign, admin = false, onAction, onDelete }: { campaign: CampaignData | null; admin?: boolean; onAction: () => void; onDelete?: () => void }) {
+function CampaignCard({ campaign, admin = false, owner = false, onAction, onDelete }: { campaign: CampaignData | null; admin?: boolean; owner?: boolean; onAction: () => void; onDelete?: () => void }) {
   if (!campaign) return <section className="empty-state"><b>{admin ? 'Missão de acesso indisponível' : 'Nenhum pulso disponível'}</b><p>Volte em instantes. As campanhas ativas aparecem aqui automaticamente.</p></section>;
   const creator = campaign.creator;
   return <article className="campaign-card">
@@ -486,7 +486,7 @@ function CampaignCard({ campaign, admin = false, onAction, onDelete }: { campaig
     <p className="creator-description">{creator?.bio || 'Peça uma leitura honesta de alguém da comunidade.'}</p>
     {creator?.screenshotUrl && <img className="profile-proof" src={creator.screenshotUrl} alt="Screenshot do perfil TikTok" />}
     <div className="request"><span>PEDIDO DA VEZ</span><p>“{campaign.prompt}”</p></div>
-    {(!admin || campaign.kind === 'tutorial') && <button className="primary-action" onClick={onAction}>Conhecer e avaliar {!admin && <span>+1</span>}</button>}
+    {(!admin || campaign.kind === 'tutorial') && <button className="primary-action" onClick={onAction} disabled={owner}>{owner ? 'A sua campanha' : <>Conhecer e avaliar {!admin && <span>+1</span>}</>}</button>}
     {admin && onDelete && <button className="secondary-action admin-delete" onClick={onDelete}>Excluir publicação</button>}
   </article>;
 }
