@@ -1,4 +1,4 @@
-name: Build Video Harvester v1.1
+name: Build Video Harvester v1.2
 
 on:
   push:
@@ -24,14 +24,14 @@ jobs:
         working-directory: video-harvester-android
         run: gradle :app:assembleDebug --stacktrace
       - name: Prepare APK
-        run: cp video-harvester-android/app/build/outputs/apk/debug/app-debug.apk Video-Harvester-v1.1.apk
+        run: cp video-harvester-android/app/build/outputs/apk/debug/app-debug.apk Video-Harvester-v1.2.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: Video-Harvester-v1.1
-          path: Video-Harvester-v1.1.apk
+          name: Video-Harvester-v1.2
+          path: Video-Harvester-v1.2.apk
       - uses: softprops/action-gh-release@v2
         with:
-          tag_name: video-harvester-v1.1
-          name: Video Harvester v1.1
-          body: Recursive iframe scanner, popup blocking and organized movie/series catalog.
-          files: Video-Harvester-v1.1.apk
+          tag_name: video-harvester-v1.2
+          name: Video Harvester v1.2
+          body: Fixes the domain crawler by separating site-page and iframe queues while keeping recursive iframe scanning and catalog organization.
+          files: Video-Harvester-v1.2.apk
