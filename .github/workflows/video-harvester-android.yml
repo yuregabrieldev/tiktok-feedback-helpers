@@ -1,4 +1,4 @@
-name: Build and Release Video Harvester Android APK
+name: Build Video Harvester v1.1
 
 on:
   push:
@@ -20,20 +20,18 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-      - name: Build debug APK
+      - name: Build APK
         working-directory: video-harvester-android
         run: gradle :app:assembleDebug --stacktrace
       - name: Prepare APK
-        run: |
-          cp video-harvester-android/app/build/outputs/apk/debug/app-debug.apk Video-Harvester-v1.0.apk
-      - name: Upload Actions artifact
-        uses: actions/upload-artifact@v4
+        run: cp video-harvester-android/app/build/outputs/apk/debug/app-debug.apk Video-Harvester-v1.1.apk
+      - uses: actions/upload-artifact@v4
         with:
-          name: Video-Harvester-APK
-          path: Video-Harvester-v1.0.apk
-      - name: Publish GitHub Release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release delete video-harvester-v1.0 --yes --cleanup-tag || true
-          gh release create video-harvester-v1.0 Video-Harvester-v1.0.apk --target "${GITHUB_SHA}" --title "Video Harvester v1.0" --notes "APK Android do Video Harvester. Instalação direta no Android."
+          name: Video-Harvester-v1.1
+          path: Video-Harvester-v1.1.apk
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: video-harvester-v1.1
+          name: Video Harvester v1.1
+          body: Recursive iframe scanner, popup blocking and organized movie/series catalog.
+          files: Video-Harvester-v1.1.apk
