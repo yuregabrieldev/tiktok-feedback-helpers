@@ -1,0 +1,66 @@
+package com.yure.videoharvester;
+
+import android.app.*;
+import android.os.*;
+import android.content.*;
+import android.graphics.Color;
+import android.webkit.*;
+import android.view.*;
+import android.widget.*;
+import android.net.Uri;
+import org.json.*;
+import java.nio.charset.StandardCharsets;
+
+public class PlayerInspectorActivity extends Activity {
+  WebView browser; TextView info; String snapshot=""; String report=""; int popups=0, requests=0; String lastError="";
+  final Handler ui=new Handler(Looper.getMainLooper());
+  int dp(int n){return (int)(n*getResources().getDisplayMetrics().density+.5f);}
+  @Override public void onCreate(Bundle b){
+    super.onCreate(b);
+    String url=getIntent().getStringExtra("url");if(url==null)url="about:blank";
+    LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setBackgroundColor(0xff14181b);
+    TextView title=new TextView(this);title.setText("Inspecionar player • v1.4");title.setTextColor(-1);title.setTextSize(19);title.setPadding(dp(12),dp(8),dp(8),dp(5));root.addView(title);
+    info=new TextView(this);info.setTextColor(0xffcad1df);info.setTextSize(12);info.setPadding(dp(12),0,dp(8),dp(7));info.setText("Aguardando página...");root.addView(info);
+    LinearLayout bar=new LinearLayout(this);
+    Button inspect=new Button(this);inspect.setText("Capturar DOM");bar.addView(inspect,new LinearLayout.LayoutParams(0,dp(52),1));
+    Button save=new Button(this);save.setText("Exportar HTML");bar.addView(save,new LinearLayout.LayoutParams(0,dp(52),1));
+    Button summary=new Button(this);summary.setText("Relatório");bar.addView(summary,new LinearLayout.LayoutParams(0,dp(52),1));
+    root.addView(bar);
+    browser=new WebView(this);root.addView(browser,new LinearLayout.LayoutParams(-1,0,1));setContentView(root);
+    WebSettings s=browser.getSettings();s.setJavaScriptEnabled(true);s.setDomStorageEnabled(true);s.setMediaPlaybackRequiresUserGesture(false);
+    s.setSupportMultipleWindows(true);s.setJavaScriptCanOpenWindowsAutomatically(true);
+    CookieManager.getInstance().setAcceptCookie(true);CookieManager.getInstance().setAcceptThirdPartyCookies(browser,true);
+    browser.setWebChromeClient(new WebChromeClient(){
+      @Override public boolean onCreateWindow(WebView v,boolean d,boolean gesture,Message msg){popups++;refresh();return false;}
+      @Override public void onShowCustomView(View view,CustomViewCallback cb){new AlertDialog.Builder(PlayerInspectorActivity.this).setMessage("Modo tela cheia solicitado. Para continuar a inspeção, mantenha o player nesta janela.").setPositiveButton("OK",(x,y)->cb.onCustomViewHidden()).show();}
+    });
+    browser.setWebViewClient(new WebViewClient(){
+      @Override public WebResourceResponse shouldInterceptRequest(WebView v,WebResourceRequest req){requests++;return super.shouldInterceptRequest(v,req);}
+      @Override public void onReceivedHttpError(WebView v,WebResourceRequest req,WebResourceResponse res){if(req.isForMainFrame()){lastError="HTTP "+res.getStatusCode();refresh();}}
+      @Override public void onReceivedError(WebView v,WebResourceRequest req,WebResourceError e){if(req.isForMainFrame()){lastError=String.valueOf(e.getDescription());refresh();}}
+      @Override public void onPageFinished(WebView v,String address){refresh();}
+    });
+    inspect.setOnClickListener(v->capture(false));
+    save.setOnClickListener(v->capture(true));
+    summary.setOnClickListener(v->new AlertDialog.Builder(this).setTitle("Diagnóstico").setMessage(report.isEmpty()?"Use Capturar DOM primeiro.":report).setPositiveButton("OK",null).show());
+    browser.loadUrl(url);
+  }
+  void refresh(){ui.post(()->info.setText("URL: "+browser.getUrl()+"\nPopups: "+popups+" • Requisições observadas: "+requests+(lastError.isEmpty()?"":" • "+lastError)));}
+  void capture(boolean save){
+    String js="(function(){try{const es=[...document.querySelectorAll('video,audio,source,button,[role=button],iframe')].slice(0,250);const info=es.map(e=>({tag:e.tagName,role:e.getAttribute('role'),id:e.id,cls:String(e.className||'').slice(0,160),text:(e.innerText||'').slice(0,120),src:e.getAttribute('src'),state:e.tagName==='VIDEO'?{paused:e.paused,readyState:e.readyState,currentTime:e.currentTime,duration:e.duration,src:e.currentSrc}:null}));return JSON.stringify({url:location.href,title:document.title,controls:info,html:document.documentElement.outerHTML.slice(0,1000000)});}catch(e){return JSON.stringify({error:String(e)})}})()";
+    browser.evaluateJavascript(js,result->{
+      try{
+        String raw=new JSONArray("["+result+"]").getString(0);
+        JSONObject obj=new JSONObject(raw);
+        snapshot=obj.optString("html","");
+        JSONArray controls=obj.optJSONArray("controls");
+        report="Página: "+obj.optString("url")+"\nTítulo: "+obj.optString("title")+"\nElementos encontrados: "+(controls==null?0:controls.length())+"\nPopups: "+popups+"\nRequisições observadas: "+requests+"\nErro: "+lastError+"\n\nControles:\n"+(controls==null?"":controls.toString(2));
+        if(save){Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);i.addCategory(Intent.CATEGORY_OPENABLE);i.setType("text/html");i.putExtra(Intent.EXTRA_TITLE,"video-harvester-dom.html");startActivityForResult(i,71);}
+        else new AlertDialog.Builder(this).setTitle("DOM capturado").setMessage(report.length()>12000?report.substring(0,12000):report).setPositiveButton("OK",null).show();
+      }catch(Exception ex){Toast.makeText(this,"Falha ao capturar: "+ex.getMessage(),Toast.LENGTH_LONG).show();}
+    });
+  }
+  @Override protected void onActivityResult(int req,int code,Intent data){super.onActivityResult(req,code,data);if(req==71&&code==RESULT_OK&&data!=null){try(java.io.OutputStream out=getContentResolver().openOutputStream(data.getData())){out.write(snapshot.getBytes(StandardCharsets.UTF_8));Toast.makeText(this,"HTML exportado",Toast.LENGTH_SHORT).show();}catch(Exception e){Toast.makeText(this,e.toString(),Toast.LENGTH_LONG).show();}}}
+  @Override public void onBackPressed(){if(browser!=null&&browser.canGoBack())browser.goBack();else super.onBackPressed();}
+  @Override protected void onDestroy(){if(browser!=null)browser.destroy();super.onDestroy();}
+}
