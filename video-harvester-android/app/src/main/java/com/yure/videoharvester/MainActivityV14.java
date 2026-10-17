@@ -7,8 +7,9 @@ import android.widget.*;
 public class MainActivityV14 extends MainActivityV13 {
   @Override void buildUi(){
     super.buildUi();
-    ((TextView)((LinearLayout)((ScrollView)((LinearLayout)findViewById(android.R.id.content).getChildAt(0)).getChildAt(0)).getChildAt(0)).getChildAt(0)).setText("Video Harvester 1.4");
+    renameTitle((android.view.ViewGroup)findViewById(android.R.id.content));
   }
+  boolean renameTitle(android.view.ViewGroup root){for(int i=0;i<root.getChildCount();i++){android.view.View v=root.getChildAt(i);if(v instanceof TextView && ((TextView)v).getText().toString().startsWith("Video Harvester")){((TextView)v).setText("Video Harvester 1.4");return true;}if(v instanceof android.view.ViewGroup && renameTitle((android.view.ViewGroup)v))return true;}return false;}
   @Override void showHits(){
     results.removeAllViews();
     int shown=0;
