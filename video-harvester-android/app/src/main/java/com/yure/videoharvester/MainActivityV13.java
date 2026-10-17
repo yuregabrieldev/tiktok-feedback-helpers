@@ -31,7 +31,7 @@ public class MainActivityV13 extends MainActivityV12 {
     browserUa=WebSettings.getDefaultUserAgent(this);
     s.setUserAgentString(browserUa);
 
-    CookieManager cm=CookieManager.getInstance();
+    android.webkit.CookieManager cm=android.webkit.CookieManager.getInstance();
     cm.setAcceptCookie(true);
     if(Build.VERSION.SDK_INT>=21) cm.setAcceptThirdPartyCookies(web,true);
 
@@ -67,7 +67,7 @@ public class MainActivityV13 extends MainActivityV12 {
 
       @Override public void onPageFinished(WebView v,String url){
         currentPage=url;
-        CookieManager.getInstance().flush();
+        android.webkit.CookieManager.getInstance().flush();
         String js="(function(){try{"+
           "const A=u=>{try{return new URL(u,location.href).href}catch(e){return null}};"+
           "const body=(document.body&&document.body.innerText||'').slice(0,3000);"+
@@ -98,7 +98,7 @@ public class MainActivityV13 extends MainActivityV12 {
         c.setInstanceFollowRedirects(true);
         c.setRequestProperty("User-Agent",browserUa==null||browserUa.isEmpty()?"Mozilla/5.0":browserUa);
         c.setRequestProperty("Accept","text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
-        String cookies=CookieManager.getInstance().getCookie(root);
+        String cookies=android.webkit.CookieManager.getInstance().getCookie(root);
         if(cookies!=null&&!cookies.isEmpty()) c.setRequestProperty("Cookie",cookies);
         int code=c.getResponseCode();
         if(code>=200&&code<300){
