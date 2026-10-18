@@ -283,7 +283,7 @@ public class MainActivityV21 extends MainActivityV20 {
       }
     }
     if(next==0){if(!scanning||runMode==1)attachWeb(scanWebHost,180);}
-    if(next==1){attachWeb(iframeWebHost,220);renderInbox();renderDiscoveries();}
+    if(next==1){attachWeb(iframeWebHost,220);renderInbox();}
     if(next==2)renderVideos();
     if(next==3)renderLibrary();
     refresh();
