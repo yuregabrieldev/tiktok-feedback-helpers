@@ -25,8 +25,12 @@ public class MainActivityV25 extends MainActivityV24 {
   }
   String statusFor(Source s){
     if(s==null)return "Sem fonte";
-    if(isIframeReference(s))return "Somente player original • link independente indisponível";
     String result=getSharedPreferences(PLAY_PREFS,0).getString("source_"+s.url.hashCode(),"");
+    if(isIframeReference(s)){
+      return "ORIGINAL_PLAYED".equals(result)?
+        "✓ Reproduziu no player original • sem link independente":
+        "Somente player original • link independente indisponível";
+    }
     if("PLAYED".equals(result))return "✓ Reprodução direta confirmada neste dispositivo";
     if("ERROR".equals(result))return "Falhou no teste de reprodução";
     if("TIMEOUT".equals(result))return "Não confirmada: tempo esgotado";
@@ -121,12 +125,13 @@ public class MainActivityV25 extends MainActivityV24 {
     if(request!=TEST_REQUEST||code!=RESULT_OK||data==null)return;
     int hash=data.getIntExtra("sourceUrlHash",0);
     String status=data.getStringExtra("testStatus");
-    if(data.getBooleanExtra("direct",false)&&hash!=0&&status!=null&&!status.isEmpty()){
+    if(hash!=0&&status!=null&&("PLAYED".equals(status)||"ERROR".equals(status)||"TIMEOUT".equals(status)||"ORIGINAL_PLAYED".equals(status))){
       getSharedPreferences(PLAY_PREFS,0).edit().putString("source_"+hash,status).apply();
     }
     if(screen==3)renderLibrary();
     if(screen==2)renderVideos();
     if("PLAYED".equals(status))toast("Reprodução direta confirmada nesta sessão");
+    if("ORIGINAL_PLAYED".equals(status))toast("Funcionou no player original, mas não é um link independente");
   }
   @Override JSONObject buildBackup(){
     JSONObject o=super.buildBackup();
@@ -156,7 +161,7 @@ public class MainActivityV25 extends MainActivityV24 {
     for(int i=0;i<tests.length();i++){
       JSONObject data=tests.optJSONObject(i);if(data==null)continue;
       String status=data.optString("state","");
-      if(status.equals("PLAYED")||status.equals("ERROR")||status.equals("TIMEOUT"))
+      if(status.equals("PLAYED")||status.equals("ORIGINAL_PLAYED")||status.equals("ERROR")||status.equals("TIMEOUT"))
         edit.putString("source_"+data.optInt("urlHash"),status);
     }
     edit.apply();
