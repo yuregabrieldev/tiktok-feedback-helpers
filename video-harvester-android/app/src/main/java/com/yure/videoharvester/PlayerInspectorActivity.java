@@ -21,9 +21,9 @@ public class PlayerInspectorActivity extends Activity {
   @Override public void onCreate(Bundle b){
     super.onCreate(b);
     String url=getIntent().getStringExtra("url");if(url==null)url="about:blank";
-    LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setBackgroundColor(0xffF8F5F6);
-    TextView title=new TextView(this);title.setText("Inspecionar player • v1.9");title.setTextColor(0xff651F36);title.setTextSize(19);title.setPadding(dp(12),dp(8),dp(8),dp(5));root.addView(title);
-    info=new TextView(this);info.setTextColor(0xff352B30);info.setTextSize(12);info.setPadding(dp(12),0,dp(8),dp(7));info.setText("Aguardando página...");root.addView(info);
+    LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setBackgroundColor(0xff421323);
+    TextView title=new TextView(this);title.setText("Inspecionar player • v2.0");title.setTextColor(Color.WHITE);title.setTextSize(19);title.setPadding(dp(12),dp(8),dp(8),dp(5));root.addView(title);
+    info=new TextView(this);info.setTextColor(0xffF6E9ED);info.setTextSize(12);info.setPadding(dp(12),0,dp(8),dp(7));info.setText("Aguardando página...");root.addView(info);
     LinearLayout bar=new LinearLayout(this);
     Button inspect=new Button(this);inspect.setText("Capturar DOM");bar.addView(inspect,new LinearLayout.LayoutParams(0,dp(52),1));
     Button save=new Button(this);save.setText("Exportar HTML");bar.addView(save,new LinearLayout.LayoutParams(0,dp(52),1));
@@ -37,7 +37,7 @@ public class PlayerInspectorActivity extends Activity {
     style(record,true);
     root.addView(record,new LinearLayout.LayoutParams(-1,dp(49)));
     record.setOnClickListener(v->saveInspectionResult());
-    browser=new WebView(this);root.addView(browser,new LinearLayout.LayoutParams(-1,0,1));setContentView(root);
+    browser=new WebView(this);browser.setBackgroundColor(Color.WHITE);root.addView(browser,new LinearLayout.LayoutParams(-1,0,1));setContentView(root);getWindow().setStatusBarColor(0xff421323);getWindow().setNavigationBarColor(0xff421323);getWindow().getDecorView().setSystemUiVisibility(0);
     WebSettings s=browser.getSettings();s.setJavaScriptEnabled(true);s.setDomStorageEnabled(true);s.setMediaPlaybackRequiresUserGesture(false);
     s.setSupportMultipleWindows(true);s.setJavaScriptCanOpenWindowsAutomatically(true);
     CookieManager.getInstance().setAcceptCookie(true);CookieManager.getInstance().setAcceptThirdPartyCookies(browser,true);
@@ -65,7 +65,7 @@ public class PlayerInspectorActivity extends Activity {
         JSONObject obj=new JSONObject(raw);
         snapshot=obj.optString("html","");
         JSONArray controls=obj.optJSONArray("controls");
-        report="Página: "+obj.optString("url")+"\nTítulo: "+obj.optString("title")+"\nElementos encontrados: "+(controls==null?0:controls.length())+"\nPopups: "+popups+"\nRequisições observadas: "+requests+"\nErro: "+lastError+"\n\nControles:\n"+(controls==null?"":controls.toString(2));
+        report="Página: "+obj.optString("url")+"\nTítulo: "+obj.optString("title")+"\n"+classifyElements(controls)+"\nElementos encontrados: "+(controls==null?0:controls.length())+"\nPopups: "+popups+"\nRequisições observadas: "+requests+"\nErro: "+lastError+"\n\nControles:\n"+(controls==null?"":controls.toString(2));
         if(save){Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);i.addCategory(Intent.CATEGORY_OPENABLE);i.setType("text/html");i.putExtra(Intent.EXTRA_TITLE,"video-harvester-dom.html");startActivityForResult(i,71);}
         else new AlertDialog.Builder(this).setTitle("DOM capturado").setMessage(report.length()>12000?report.substring(0,12000):report).setPositiveButton("OK",null).show();
       }catch(Exception ex){Toast.makeText(this,"Falha ao capturar: "+ex.getMessage(),Toast.LENGTH_LONG).show();}
@@ -73,15 +73,41 @@ public class PlayerInspectorActivity extends Activity {
   }
   @Override protected void onActivityResult(int req,int code,Intent data){super.onActivityResult(req,code,data);if(req==71&&code==RESULT_OK&&data!=null){try(java.io.OutputStream out=getContentResolver().openOutputStream(data.getData())){out.write(snapshot.getBytes(StandardCharsets.UTF_8));Toast.makeText(this,"HTML exportado",Toast.LENGTH_SHORT).show();}catch(Exception e){Toast.makeText(this,e.toString(),Toast.LENGTH_LONG).show();}}}
 
+
+  String classifyElements(JSONArray controls){
+    int active=0,empty=0,ads=0,other=0;
+    if(controls!=null)for(int i=0;i<controls.length();i++){
+      JSONObject e=controls.optJSONObject(i);
+      if(e==null)continue;
+      String tag=e.optString("tag");
+      if("VIDEO".equals(tag)){
+        JSONObject state=e.optJSONObject("state");
+        String src=state==null?"":state.optString("src","");
+        int ready=state==null?0:state.optInt("readyState");
+        if(src.startsWith("http")&&ready>=2)active++;
+        else if(src.isEmpty()&&ready==0)empty++;
+      }else if("IFRAME".equals(tag)){
+        String src=e.optString("src","");
+        if(src.contains("imasdk.googleapis.com")||src.contains("doubleclick.net"))ads++;
+        else other++;
+      }
+    }
+    return "Vídeos HTML5 ativos: "+active+" | Elementos VIDEO vazios: "+empty+
+      " | Iframes de anúncios: "+ads+" | Outros iframes: "+other+
+      "\nO Google IMA é publicidade, não o vídeo principal.";
+  }
   void saveInspectionResult(){
     if(browser==null)return;
-    String js="(function(){try{const v=[...document.querySelectorAll('video')],s=[...document.querySelectorAll('source')];const ready=v.reduce((n,x)=>Math.max(n,x.readyState||0),0);const media=v.filter(x=>(x.currentSrc||x.src||'').startsWith('http')).length+s.filter(x=>(x.src||'').startsWith('http')).length;return JSON.stringify({videoCount:v.length,mediaCount:media,readyState:ready,playerControls:!!document.querySelector('.video-js,.vjs-big-play-button,video'),mediaDetected:media>0&&ready>=2});}catch(e){return '{}'}})()";
+    String js="(function(){try{const v=[...document.querySelectorAll('video')],s=[...document.querySelectorAll('source')],f=[...document.querySelectorAll('iframe')];const src=x=>(x.currentSrc||x.src||'');const active=v.filter(x=>/^https?:/i.test(src(x))&&x.readyState>=2);const blank=v.filter(x=>!src(x)&&x.readyState===0);const ready=v.reduce((n,x)=>Math.max(n,x.readyState||0),0);const media=active.length+s.filter(x=>/^https?:/i.test(src(x))).length;const ads=f.filter(x=>/imasdk[.]googleapis[.]com|doubleclick[.]net/i.test(x.src||'')).length;return JSON.stringify({videoCount:v.length,activeVideos:active.length,emptyVideos:blank.length,adIframes:ads,mediaCount:media,readyState:ready,playerControls:!!document.querySelector('.video-js,.vjs-big-play-button,video'),mediaDetected:active.length>0});}catch(e){return '{}'}})()";
     browser.evaluateJavascript(js,encoded->{
       try{
         JSONObject data=new JSONObject(new JSONArray("["+encoded+"]").getString(0));
         Intent outcome=new Intent();
         outcome.putExtra("page",getIntent().getStringExtra("url"));
         outcome.putExtra("videoCount",data.optInt("videoCount"));
+        outcome.putExtra("activeVideos",data.optInt("activeVideos"));
+        outcome.putExtra("emptyVideos",data.optInt("emptyVideos"));
+        outcome.putExtra("adIframes",data.optInt("adIframes"));
         outcome.putExtra("mediaCount",data.optInt("mediaCount"));
         outcome.putExtra("readyState",data.optInt("readyState"));
         outcome.putExtra("playerControls",data.optBoolean("playerControls"));
