@@ -19,6 +19,11 @@ public class MainActivityV16 extends MainActivityV15 {
     super.buildUi();
     renameTitle16((ViewGroup)findViewById(android.R.id.content));
     styleTree((ViewGroup)findViewById(android.R.id.content));
+    LinearLayout parent=(LinearLayout)results.getParent();
+    Button again=btn("Reanalisar iframes guardados");
+    again.setBackground(rounded(0xff344566,13));
+    parent.addView(again,parent.indexOfChild(results));
+    again.setOnClickListener(v->{if(scanning){toast("Aguarde o scan atual");return;}if(hits.isEmpty()){toast("Importe um backup primeiro");return;}String raw=urlBox.getText().toString().trim();if(raw.isEmpty()){toast("Informe o site original");return;}try{rootHost=Uri.parse(raw).getHost();}catch(Exception ignored){}frameSeen.clear();queuedFrame.clear();frameQueue.clear();for(Hit h:hits.values())if("IFRAME".equals(h.type))enqueueFrame(h.url,1,h.page);scanning=true;status.setText("Reanalisando "+frameQueue.size()+" iframes do backup");nextTask();});
     restoreCrawlState();
     stateReady=true;
     if(restored>0){status.setText("Projeto recuperado: "+restored+" descobertas. Use Continuar scan.");showHits();}
@@ -87,6 +92,17 @@ public class MainActivityV16 extends MainActivityV15 {
     status.setText("Continuando: "+siteSeen.size()+" já visitadas, "+siteQueue.size()+" pendentes");
     nextTask();
     if(scanning)try{Intent i=new Intent(this,ScanNotificationService.class);i.setAction("START");if(Build.VERSION.SDK_INT>=26)startForegroundService(i);else startService(i);}catch(Exception ignored){}
+  }
+  @Override void enqueueSite(String url){
+    try{String n=norm(url);Uri u=Uri.parse(n);String h=u.getHost();if(h==null||!allowed(h))return;
+      if(!"https".equalsIgnoreCase(u.getScheme())&&!"http".equalsIgnoreCase(u.getScheme()))return;
+      if(siteQueue.size()>15000)return;
+      if(!siteSeen.contains(n)&&queuedSite.add(n))siteQueue.add(new Task(n,0,"SITE",""));
+    }catch(Exception ignored){}
+  }
+  @Override void enqueueFrame(String url,int depth,String parent){
+    if(url.contains("disqus.com/")||url.contains("chatango.com/")||url.contains("googlesyndication.com/"))return;
+    super.enqueueFrame(url,depth,parent);
   }
   @Override void nextTask(){
     if(!scanning)return;
