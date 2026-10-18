@@ -19,13 +19,15 @@ public class PlayerInspectorActivity extends Activity {
     super.onCreate(b);
     String url=getIntent().getStringExtra("url");if(url==null)url="about:blank";
     LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setBackgroundColor(0xff14181b);
-    TextView title=new TextView(this);title.setText("Inspecionar player • v1.4");title.setTextColor(-1);title.setTextSize(19);title.setPadding(dp(12),dp(8),dp(8),dp(5));root.addView(title);
+    TextView title=new TextView(this);title.setText("Inspecionar player • v1.6");title.setTextColor(-1);title.setTextSize(19);title.setPadding(dp(12),dp(8),dp(8),dp(5));root.addView(title);
     info=new TextView(this);info.setTextColor(0xffcad1df);info.setTextSize(12);info.setPadding(dp(12),0,dp(8),dp(7));info.setText("Aguardando página...");root.addView(info);
     LinearLayout bar=new LinearLayout(this);
     Button inspect=new Button(this);inspect.setText("Capturar DOM");bar.addView(inspect,new LinearLayout.LayoutParams(0,dp(52),1));
     Button save=new Button(this);save.setText("Exportar HTML");bar.addView(save,new LinearLayout.LayoutParams(0,dp(52),1));
     Button summary=new Button(this);summary.setText("Relatório");bar.addView(summary,new LinearLayout.LayoutParams(0,dp(52),1));
     root.addView(bar);
+    Button copy=new Button(this);copy.setText("Copiar relatório");root.addView(copy,new LinearLayout.LayoutParams(-1,dp(46)));
+    copy.setOnClickListener(v->{if(report.isEmpty()){capture(false);return;}((android.content.ClipboardManager)getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(ClipData.newPlainText("Video Harvester - diagnóstico",report));Toast.makeText(this,"Relatório copiado",Toast.LENGTH_SHORT).show();});
     browser=new WebView(this);root.addView(browser,new LinearLayout.LayoutParams(-1,0,1));setContentView(root);
     WebSettings s=browser.getSettings();s.setJavaScriptEnabled(true);s.setDomStorageEnabled(true);s.setMediaPlaybackRequiresUserGesture(false);
     s.setSupportMultipleWindows(true);s.setJavaScriptCanOpenWindowsAutomatically(true);
@@ -42,7 +44,7 @@ public class PlayerInspectorActivity extends Activity {
     });
     inspect.setOnClickListener(v->capture(false));
     save.setOnClickListener(v->capture(true));
-    summary.setOnClickListener(v->new AlertDialog.Builder(this).setTitle("Diagnóstico").setMessage(report.isEmpty()?"Use Capturar DOM primeiro.":report).setPositiveButton("OK",null).show());
+    summary.setOnClickListener(v->{EditText box=new EditText(this);box.setText(report.isEmpty()?"Use Capturar DOM primeiro.":report);box.setTextIsSelectable(true);box.setSingleLine(false);ScrollView scroll=new ScrollView(this);scroll.addView(box);new AlertDialog.Builder(this).setTitle("Diagnóstico selecionável").setView(scroll).setPositiveButton("Copiar",(d,w)->{((android.content.ClipboardManager)getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(ClipData.newPlainText("Diagnóstico",report));}).setNegativeButton("Fechar",null).show();});
     browser.loadUrl(url);
   }
   void refresh(){ui.post(()->info.setText("URL: "+browser.getUrl()+"\nPopups: "+popups+" • Requisições observadas: "+requests+(lastError.isEmpty()?"":" • "+lastError)));}
