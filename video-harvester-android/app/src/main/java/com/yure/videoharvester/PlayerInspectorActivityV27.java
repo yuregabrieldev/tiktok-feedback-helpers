@@ -19,6 +19,8 @@ public class PlayerInspectorActivityV27 extends PlayerInspectorActivityV26 {
   private WebView popupWeb;
   private int topInset=0;
 
+  void onInspectorPageProgress(int progress){}
+
   @Override public void onCreate(Bundle state){
     super.onCreate(state);
     final LinearLayout root=(LinearLayout)browser.getParent();
@@ -57,6 +59,9 @@ public class PlayerInspectorActivityV27 extends PlayerInspectorActivityV26 {
     browser.getSettings().setJavaScriptCanOpenWindowsAutomatically(false);
     if(Build.VERSION.SDK_INT>=26)browser.getSettings().setSafeBrowsingEnabled(true);
     browser.setWebChromeClient(new WebChromeClient(){
+      @Override public void onProgressChanged(WebView view,int progress){
+        onInspectorPageProgress(progress);
+      }
       @Override public boolean onCreateWindow(WebView view,boolean isDialog,boolean isUserGesture,Message resultMsg){
         popups++;
         refresh();
