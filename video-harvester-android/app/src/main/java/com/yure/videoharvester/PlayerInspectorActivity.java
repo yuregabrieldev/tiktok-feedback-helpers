@@ -22,7 +22,7 @@ public class PlayerInspectorActivity extends Activity {
     super.onCreate(b);
     String url=getIntent().getStringExtra("url");if(url==null)url="about:blank";
     LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setBackgroundColor(0xff421323);
-    TextView title=new TextView(this);title.setText("Inspecionar player • v2.0");title.setTextColor(Color.WHITE);title.setTextSize(19);title.setPadding(dp(12),dp(8),dp(8),dp(5));root.addView(title);
+    TextView title=new TextView(this);title.setText("Inspecionar player • v2.4");title.setTextColor(Color.WHITE);title.setTextSize(19);title.setPadding(dp(12),dp(8),dp(8),dp(5));root.addView(title);
     info=new TextView(this);info.setTextColor(0xffF6E9ED);info.setTextSize(12);info.setPadding(dp(12),0,dp(8),dp(7));info.setText("Aguardando página...");root.addView(info);
     LinearLayout bar=new LinearLayout(this);
     Button inspect=new Button(this);inspect.setText("Capturar DOM");bar.addView(inspect,new LinearLayout.LayoutParams(0,dp(52),1));
@@ -37,6 +37,12 @@ public class PlayerInspectorActivity extends Activity {
     style(record,true);
     root.addView(record,new LinearLayout.LayoutParams(-1,dp(49)));
     record.setOnClickListener(v->saveInspectionResult());
+    Button sendVideo=new Button(this);
+    sendVideo.setText("▶  Capturar mídia após Play → Vídeos");
+    style(sendVideo,true);
+    root.addView(sendVideo,new LinearLayout.LayoutParams(-1,dp(53)));
+    sendVideo.setOnClickListener(v->captureForVideos());
+
     browser=new WebView(this);browser.setBackgroundColor(Color.WHITE);root.addView(browser,new LinearLayout.LayoutParams(-1,0,1));setContentView(root);getWindow().setStatusBarColor(0xff421323);getWindow().setNavigationBarColor(0xff421323);getWindow().getDecorView().setSystemUiVisibility(0);
     WebSettings s=browser.getSettings();s.setJavaScriptEnabled(true);s.setDomStorageEnabled(true);s.setMediaPlaybackRequiresUserGesture(false);
     s.setSupportMultipleWindows(true);s.setJavaScriptCanOpenWindowsAutomatically(true);
@@ -95,6 +101,64 @@ public class PlayerInspectorActivity extends Activity {
     return "Vídeos HTML5 ativos: "+active+" | Elementos VIDEO vazios: "+empty+
       " | Iframes de anúncios: "+ads+" | Outros iframes: "+other+
       "\nO Google IMA é publicidade, não o vídeo principal.";
+  }
+
+  void captureForVideos(){
+    if(browser==null)return;
+    // Observe a media element only after normal playback: no ad clicking or bypass.
+    String script="(function(){try{"+
+      "const videos=[...document.querySelectorAll('video')];"+
+      "const valid=videos.filter(v=>/^https?:/i.test(v.currentSrc||v.src||'')&&v.readyState>=2);"+
+      "valid.sort((a,b)=>b.readyState-a.readyState);"+
+      "const v=valid[0];if(!v)return JSON.stringify({ok:false,reason:'Aguardando uma fonte de vídeo carregada'});"+
+      "const src=v.currentSrc||v.src||'';"+
+      "const format=/[.]m3u8(?:[?#]|$)/i.test(src)?'HLS':/[.]mpd(?:[?#]|$)/i.test(src)?'DASH':/[.]webm(?:[?#]|$)/i.test(src)?'WEBM':/[.]mp4(?:[?#]|$)/i.test(src)?'MP4':'HTML5';"+
+      "return JSON.stringify({ok:true,url:src,title:document.title||'',format:format,ready:v.readyState,duration:isFinite(v.duration)?Math.round(v.duration):0,paused:v.paused});"+
+      "}catch(e){return JSON.stringify({ok:false,reason:String(e)})}})()";
+    browser.evaluateJavascript(script,encoded->{
+      try{
+        JSONObject data=new JSONObject(new JSONArray("["+encoded+"]").getString(0));
+        if(!data.optBoolean("ok")){
+          new AlertDialog.Builder(this).setTitle("Mídia ainda não disponível")
+            .setMessage("Inicie a reprodução normalmente, aguarde o vídeo carregar e tente Capturar novamente.\n\n"+
+              data.optString("reason","Nenhuma fonte HTML5 pronta."))
+            .setPositiveButton("OK",null).show();
+          return;
+        }
+        String source=data.optString("url","");
+        Uri parsed=Uri.parse(source);
+        String host=parsed.getHost();
+        if(host==null||!("https".equalsIgnoreCase(parsed.getScheme())||"http".equalsIgnoreCase(parsed.getScheme()))){
+          Toast.makeText(this,"Fonte de mídia inválida",Toast.LENGTH_LONG).show();return;
+        }
+        String lower=source.toLowerCase(java.util.Locale.ROOT);
+        // Do not persist session-authenticated source URLs. They are not durable.
+        boolean temporary=lower.contains("token=")||lower.contains("ip_bind=")||
+          lower.contains("signature=")||lower.contains("sig=")||
+          lower.contains("expires=")||lower.contains("policy=")||
+          lower.contains("proxy.mp4")||lower.contains("&url=")||
+          lower.contains("sv=")||lower.contains("auth=");
+        Intent outcome=new Intent();
+        outcome.putExtra("page",getIntent().getStringExtra("url"));
+        outcome.putExtra("sourcePage",getIntent().getStringExtra("sourcePage"));
+        outcome.putExtra("captureToVideos",true);
+        outcome.putExtra("mediaDetected",true);
+        outcome.putExtra("videoCount",1);
+        outcome.putExtra("activeVideos",1);
+        outcome.putExtra("mediaCount",1);
+        outcome.putExtra("readyState",data.optInt("ready",2));
+        outcome.putExtra("durationSeconds",data.optInt("duration",0));
+        outcome.putExtra("mediaFormat",data.optString("format","HTML5"));
+        outcome.putExtra("sourceHost",host);
+        outcome.putExtra("sessionBound",temporary);
+        outcome.putExtra("mediaUrl",temporary?"":source);
+        outcome.putExtra("mediaTitle",getIntent().getStringExtra("mediaTitle"));
+        setResult(RESULT_OK,outcome);
+        finish();
+      }catch(Exception e){
+        Toast.makeText(this,"Falha na captura: "+e.getMessage(),Toast.LENGTH_LONG).show();
+      }
+    });
   }
   void saveInspectionResult(){
     if(browser==null)return;
