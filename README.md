@@ -1,0 +1,3 @@
+# WiFi TV Hub (Android Phone + Android TV)
+Instalável tanto no telefone Android quanto na Hisense Android TV. A interface detecta automaticamente TV vs. telefone. Abra o aplicativo na TV para mostrar IP e PIN; conecte o telefone na mesma rede Wi-Fi; introduza IP/PIN e toque Parear. Permite envio de arquivo, instalação APK com confirmação, apps, navegador, volume e tela inicial. Não injeta teclas globais nem controla televisões VIDAA/Tizen/webOS. Não promete instalação silenciosa. 
+Build: GitHub Actions > WiFi TV Hub APK > artifact WiFiTVHub-Universal-APK (arquivo ZIP contendo APK). APK assinado apenas com chave de desenvolvimento/debug, não é versão de distribuição final.
