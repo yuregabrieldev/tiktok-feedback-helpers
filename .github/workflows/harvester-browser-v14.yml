@@ -1,0 +1,69 @@
+name: Build Harvester Browser v1.4.0
+on:
+  push:
+    branches:
+      - harvester-browser-v14-stability
+    paths:
+      - harvester-browser/v1.4.0/**
+      - .github/workflows/harvester-browser-v14.yml
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Restore and verify v1.4 source
+        run: |
+          mkdir -p hb-v14
+          cat harvester-browser/v1.4.0/payload*.txt | base64 --decode > /tmp/harvester-v14.txz
+          echo "2676ef48fb053bf276281e08745f29e7c184658cd2edfa0bb2a084c7379af2a2  /tmp/harvester-v14.txz" | sha256sum -c -
+          tar -xJf /tmp/harvester-v14.txz -C hb-v14
+          test -f hb-v14/app/src/main/java/com/harvester/browser/MainActivity.java
+      - name: Locate Android SDK
+        run: |
+          echo "ANDROID_HOME=${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}" >> "$GITHUB_ENV"
+          SDKMANAGER=$(find /usr/local/lib/android/sdk -type f -name sdkmanager -print -quit)
+          test -n "$SDKMANAGER"
+          echo "SDKMANAGER=$SDKMANAGER" >> "$GITHUB_ENV"
+      - name: Install Android SDK
+        run: |
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" 'platforms;android-36' 'build-tools;36.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.6.0'
+      - name: Validate scanner, permissions and crawler
+        working-directory: hb-v14
+        run: |
+          mkdir -p /tmp/hb14-tests
+          javac -d /tmp/hb14-tests app/src/main/java/com/harvester/browser/core/*.java core-tests/CoreTests.java
+          java -cp /tmp/hb14-tests CoreTests
+      - name: Compile Harvester Browser Android
+        working-directory: hb-v14
+        run: gradle :app:assembleDebug --stacktrace --no-daemon
+      - name: Verify Android APK
+        run: |
+          test -s hb-v14/app/build/outputs/apk/debug/app-debug.apk
+          cp hb-v14/app/build/outputs/apk/debug/app-debug.apk Harvester-Browser-v1.4.0.apk
+          sha256sum Harvester-Browser-v1.4.0.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Harvester-Browser-v1.4.0
+          path: Harvester-Browser-v1.4.0.apk
+          if-no-files-found: error
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: harvester-browser-v1.4.0
+          name: Harvester Browser v1.4.0
+          body: |
+            UI refresh: browser-style full-height history, bookmarks, tabs, downloads, library, inspector, scanner and crawler screens.
+            Stability: WebView renderer crash recovery, conservative render policy, bounded previews, diagnostic report and safer tab cleanup.
+            Debug APK only. Android runtime/device-specific crashes still require on-device verification.
+          files: Harvester-Browser-v1.4.0.apk
