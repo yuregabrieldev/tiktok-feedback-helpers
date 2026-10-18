@@ -20,6 +20,7 @@ public class MainActivityV22 extends MainActivityV21 {
   boolean detailMode22=false;
   boolean ui22=false;
   boolean simplePlayback22=false;
+  final LinkedHashMap<String,String> directPlaybackResults23=new LinkedHashMap<>();
 
   @Override void buildUi(){
     ui22=false;
@@ -196,10 +197,10 @@ public class MainActivityV22 extends MainActivityV21 {
   @Override void createSettingsPage(){
     super.createSettingsPage();
     LinearLayout mode=sectionCard(settingsBody,"Automação de reprodução",
-      "Em páginas com vídeo HTML5 direto, a aplicação pode tentar iniciar a reprodução quando a fonte já está disponível. Não clica em anúncios, CAPTCHA ou bloqueios.");
-    simplePlayback22=getSharedPreferences("vh22",0).getBoolean("simplePlayback",false);
+      "Inicia automaticamente o Play quando o vídeo HTML5 ou Video.js já tiver uma fonte disponível. Não interage com anúncios obrigatórios, CAPTCHA ou controlos de acesso.");
+    simplePlayback22=getSharedPreferences("vh22",0).getBoolean("simplePlayback",true);
     CheckBox toggle=new CheckBox(this);
-    toggle.setText("Tentar Play automático em HTML5 direto e autorizado");
+    toggle.setText("Play automático quando a fonte HTML5 já estiver disponível");
     toggle.setTextSize(13);toggle.setTextColor(INK);
     toggle.setButtonTintList(ColorStateList.valueOf(WINE));
     toggle.setChecked(simplePlayback22);
@@ -209,26 +210,71 @@ public class MainActivityV22 extends MainActivityV21 {
       if(web!=null)web.getSettings().setMediaPlaybackRequiresUserGesture(!isChecked);
     });
     mode.addView(toggle);
-    mode.addView(tv("Esta opção não automatiza etapas de acesso ou publicidade. Funciona apenas em vídeos HTML5 diretos.",11,FAINT));
+    mode.addView(tv("Funciona também com Video.js já carregado. Não contorna anúncios, CAPTCHA ou tokens de acesso.",11,FAINT));
   }
 
   @Override void setupWeb(){
     super.setupWeb();
-    simplePlayback22=getSharedPreferences("vh22",0).getBoolean("simplePlayback",false);
+    simplePlayback22=getSharedPreferences("vh22",0).getBoolean("simplePlayback",true);
     web.getSettings().setMediaPlaybackRequiresUserGesture(!simplePlayback22);
   }
 
+  // Playback is attempted only after a normally accessible HTML5 source exists.
+  // No synthetic ad clicks, popup dismissal, captcha or access-state manipulation.
   @Override void inspectDom(android.webkit.WebView view,Task task,int sequence,boolean last){
     if(simplePlayback22&&scanning&&current==task&&scanSerial==sequence&&"IFRAME".equals(task.kind)){
-      String simpleScript="(function(){try{"+
-        "if(document.querySelector('.video-js,.vjs-big-play-button,#rcEmbedCaptureShield,.captcha_button,[data-rc-embed-capture],iframe[src*=imasdk],iframe[src*=doubleclick]'))return 'gated_or_player_library';"+
-        "const v=document.querySelector('video[controls][src]');"+
-        "if(!v||!/^https?:/i.test(v.currentSrc||v.src||'')||v.readyState<2)return 'no_direct_media';"+
-        "if(v.paused){v.play().catch(()=>{});return 'requested_play'}return 'already_playing';"+
-        "}catch(e){return 'not_supported'}})()";
-      view.evaluateJavascript(simpleScript,null);
+      String script="(function(){try{"+
+        "const gate=[...document.querySelectorAll('#rcEmbedCaptureShield,.captcha_button,[data-rc-embed-capture]')].some(x=>{const st=getComputedStyle(x);return st.display!=='none'&&st.visibility!=='hidden'&&x.getClientRects().length>0});"+
+        "if(gate)return 'ACCESS_REQUIRED';"+
+        "if(document.querySelector('.vjs-ad-playing,.ima-ad-container.ima-ad-displaying'))return 'AD_IN_PROGRESS';"+
+        "const video=[...document.querySelectorAll('video')].find(v=>{const src=v.currentSrc||v.src||'';return /^https?:/i.test(src)&&v.readyState>=2});"+
+        "if(!video)return 'SOURCE_NOT_READY';"+
+        "if(!video.paused)return 'ALREADY_PLAYING';"+
+        "try{const result=video.play();if(result&&result.catch)result.catch(()=>{});return 'PLAY_REQUESTED'}catch(e){return 'BROWSER_REJECTED'}"+
+        "}catch(e){return 'UNSUPPORTED'}})()";
+      view.evaluateJavascript(script,value->{
+        if(!scanning||current!=task||scanSerial!=sequence)return;
+        try{
+          String result=new org.json.JSONArray("["+value+"]").getString(0);
+          directPlaybackResults23.put(task.url,result);
+          if(currentStatus22!=null && runMode==2)currentStatus22.setText(
+            "Analisando player • "+playbackLabel23(result));
+        }catch(Exception ignored){}
+      });
     }
     super.inspectDom(view,task,sequence,last);
+  }
+  String playbackLabel23(String result){
+    if("ACCESS_REQUIRED".equals(result))return "Acesso ou anúncio obrigatório";
+    if("AD_IN_PROGRESS".equals(result))return "Anúncio em andamento";
+    if("SOURCE_NOT_READY".equals(result))return "Fonte de vídeo ainda indisponível";
+    if("PLAY_REQUESTED".equals(result))return "Play solicitado em HTML5";
+    if("ALREADY_PLAYING".equals(result))return "Vídeo já em reprodução";
+    if("BROWSER_REJECTED".equals(result))return "Play recusado pelo navegador";
+    return "Reprodução não disponível";
+  }
+  @Override org.json.JSONObject buildBackup(){
+    org.json.JSONObject backup=super.buildBackup();
+    try{
+      org.json.JSONArray arr=new org.json.JSONArray();
+      for(Map.Entry<String,String> entry:directPlaybackResults23.entrySet()){
+        org.json.JSONObject e=new org.json.JSONObject();
+        e.put("iframe",entry.getKey());e.put("playbackAttempt",entry.getValue());
+        arr.put(e);
+      }
+      backup.put("directPlaybackAttempts",arr);
+      backup.put("version",9);
+    }catch(Exception ignored){}
+    return backup;
+  }
+  @Override void importBackup(org.json.JSONObject backup)throws org.json.JSONException {
+    super.importBackup(backup);
+    org.json.JSONArray arr=backup.optJSONArray("directPlaybackAttempts");
+    if(arr!=null)for(int i=0;i<arr.length();i++){
+      org.json.JSONObject e=arr.optJSONObject(i);
+      if(e!=null&&!e.optString("iframe").isEmpty())
+        directPlaybackResults23.put(e.optString("iframe"),e.optString("playbackAttempt"));
+    }
   }
   @Override void showHits(){
     if(!ui22)return;
