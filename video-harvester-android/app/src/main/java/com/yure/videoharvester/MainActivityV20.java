@@ -12,7 +12,7 @@ import java.util.*;
 public class MainActivityV20 extends MainActivityV19 {
   final LinkedHashMap<String,PlayerData> playerData=new LinkedHashMap<>();
   TextView playerClassifier;
-  private static class PlayerData {
+  static class PlayerData {
     int allVideos=0, activeVideos=0, emptyVideos=0, adIframes=0, nestedPlayers=0, ready=0;
     boolean playerTechnology=false, videoSource=false, sessionLinked=false;
     String format="desconhecido", provider="";
