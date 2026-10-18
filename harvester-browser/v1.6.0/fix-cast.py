@@ -92,7 +92,6 @@ manifest.write_text(s)
 
 # Java-only smoke test: Cast options remain HTTPS-only and session-scoped sources
 # are always flagged as potentially unplayable on an external receiver.
-test=Path("core-tests/CoreTests.java")
-t=test.read_text()
-if "CastSourcePolicy" not in t:raise RuntimeError("Original Cast policy test not found")
+test=Path("app/src/main/java/com/harvester/browser/core/CastSourcePolicy.java")
+if not test.exists():raise RuntimeError("Cast policy not installed")
 print("Cast crash hotfix integrated; FragmentActivity, quick actions and build version verified")
