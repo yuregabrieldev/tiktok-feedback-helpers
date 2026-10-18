@@ -23,7 +23,8 @@ public class PlaybackTestActivity extends Activity {
   boolean direct=false, confirmed=false, started=false, finishing=false;
   int lastPosition=0;
   long playbackStarted=0;
-  Runnable sample;
+  Runnable sample, iframeProbe;
+  boolean iframeHadSample=false;
   int dp(int x){return (int)(x*getResources().getDisplayMetrics().density+0.5f);}
   GradientDrawable round(int color){GradientDrawable d=new GradientDrawable();d.setColor(color);d.setCornerRadius(dp(14));return d;}
   TextView label(String value,int size,int color){TextView v=new TextView(this);v.setText(value);v.setTextSize(size);v.setTextColor(color);return v;}
@@ -111,7 +112,8 @@ public class PlaybackTestActivity extends Activity {
       });
       webpage.setWebViewClient(new WebViewClient(){
         @Override public void onPageFinished(WebView view,String url){
-          report("Player original carregado — reprodução independente não verificada");
+          report("Player original carregado — aguardando reprodução");
+          startIframeProbe();
         }
         @Override public void onReceivedError(WebView v,WebResourceRequest req,WebResourceError error){
           if(req.isForMainFrame())report("Não foi possível abrir o player original");
@@ -127,6 +129,38 @@ public class PlaybackTestActivity extends Activity {
       details.setText("Esta entrada foi capturada depois da reprodução no site, mas o endereço de mídia tinha dados temporários de sessão. Não podemos afirmar que funciona na nossa Netflix. Este teste apenas reabre o player de origem.");
     }
     setContentView(root);
+  }
+
+  void startIframeProbe(){
+    if(webpage==null||iframeProbe!=null)return;
+    iframeProbe=new Runnable(){
+      @Override public void run(){
+        if(finishing||webpage==null)return;
+        String js="(function(){try{const videos=[...document.querySelectorAll('video')];"+
+          "const playing=videos.find(v=>!v.paused&&v.readyState>=2&&Number.isFinite(v.currentTime));"+
+          "return JSON.stringify({playing:!!playing,position:playing?Math.round(playing.currentTime*1000):0});"+
+          "}catch(e){return JSON.stringify({playing:false,position:0})}})()";
+        webpage.evaluateJavascript(js,value->{
+          if(finishing||confirmed)return;
+          try {
+            String decoded=new org.json.JSONArray("["+value+"]").getString(0);
+            org.json.JSONObject state=new org.json.JSONObject(decoded);
+            int position=state.optInt("position");
+            boolean playing=state.optBoolean("playing");
+            if(playing && iframeHadSample && position>lastPosition+350){
+              confirmed=true;
+              testStatus="ORIGINAL_PLAYED";
+              report("✓ Vídeo reproduzido no player original");
+              details.setText("A reprodução avançou dentro da página do provedor. Isso comprova apenas a sessão no player original; ainda não existe um link independente validado.");
+            }
+            if(playing){lastPosition=position;iframeHadSample=true;}
+            else iframeHadSample=false;
+          }catch(Exception ignored){}
+        });
+        if(!confirmed)handler.postDelayed(this,1100);
+      }
+    };
+    handler.postDelayed(iframeProbe,1100);
   }
   void beginPlayback(){
     if(video==null||sourceUrl.isEmpty())return;
@@ -180,6 +214,7 @@ public class PlaybackTestActivity extends Activity {
   @Override protected void onDestroy(){
     finishing=true;
     if(sample!=null)handler.removeCallbacks(sample);
+    if(iframeProbe!=null)handler.removeCallbacks(iframeProbe);
     if(webpage!=null){webpage.stopLoading();webpage.destroy();}
     if(video!=null){video.stopPlayback();}
     super.onDestroy();
