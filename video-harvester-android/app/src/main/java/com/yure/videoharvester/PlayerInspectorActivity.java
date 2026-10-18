@@ -22,7 +22,7 @@ public class PlayerInspectorActivity extends Activity {
     super.onCreate(b);
     String url=getIntent().getStringExtra("url");if(url==null)url="about:blank";
     LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setBackgroundColor(0xffF8F5F6);
-    TextView title=new TextView(this);title.setText("Inspecionar player • v1.7");title.setTextColor(0xff651F36);title.setTextSize(19);title.setPadding(dp(12),dp(8),dp(8),dp(5));root.addView(title);
+    TextView title=new TextView(this);title.setText("Inspecionar player • v1.9");title.setTextColor(0xff651F36);title.setTextSize(19);title.setPadding(dp(12),dp(8),dp(8),dp(5));root.addView(title);
     info=new TextView(this);info.setTextColor(0xff352B30);info.setTextSize(12);info.setPadding(dp(12),0,dp(8),dp(7));info.setText("Aguardando página...");root.addView(info);
     LinearLayout bar=new LinearLayout(this);
     Button inspect=new Button(this);inspect.setText("Capturar DOM");bar.addView(inspect,new LinearLayout.LayoutParams(0,dp(52),1));
@@ -32,6 +32,11 @@ public class PlayerInspectorActivity extends Activity {
     root.addView(bar);
     Button copy=new Button(this);copy.setText("Copiar relatório");style(copy,false);root.addView(copy,new LinearLayout.LayoutParams(-1,dp(46)));
     copy.setOnClickListener(v->{if(report.isEmpty()){capture(false);return;}((android.content.ClipboardManager)getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(ClipData.newPlainText("Video Harvester - diagnóstico",report));Toast.makeText(this,"Relatório copiado",Toast.LENGTH_SHORT).show();});
+    Button record=new Button(this);
+    record.setText("Salvar resultado da inspeção");
+    style(record,true);
+    root.addView(record,new LinearLayout.LayoutParams(-1,dp(49)));
+    record.setOnClickListener(v->saveInspectionResult());
     browser=new WebView(this);root.addView(browser,new LinearLayout.LayoutParams(-1,0,1));setContentView(root);
     WebSettings s=browser.getSettings();s.setJavaScriptEnabled(true);s.setDomStorageEnabled(true);s.setMediaPlaybackRequiresUserGesture(false);
     s.setSupportMultipleWindows(true);s.setJavaScriptCanOpenWindowsAutomatically(true);
@@ -67,6 +72,25 @@ public class PlayerInspectorActivity extends Activity {
     });
   }
   @Override protected void onActivityResult(int req,int code,Intent data){super.onActivityResult(req,code,data);if(req==71&&code==RESULT_OK&&data!=null){try(java.io.OutputStream out=getContentResolver().openOutputStream(data.getData())){out.write(snapshot.getBytes(StandardCharsets.UTF_8));Toast.makeText(this,"HTML exportado",Toast.LENGTH_SHORT).show();}catch(Exception e){Toast.makeText(this,e.toString(),Toast.LENGTH_LONG).show();}}}
+
+  void saveInspectionResult(){
+    if(browser==null)return;
+    String js="(function(){try{const v=[...document.querySelectorAll('video')],s=[...document.querySelectorAll('source')];const ready=v.reduce((n,x)=>Math.max(n,x.readyState||0),0);const media=v.filter(x=>(x.currentSrc||x.src||'').startsWith('http')).length+s.filter(x=>(x.src||'').startsWith('http')).length;return JSON.stringify({videoCount:v.length,mediaCount:media,readyState:ready,playerControls:!!document.querySelector('.video-js,.vjs-big-play-button,video'),mediaDetected:media>0&&ready>=2});}catch(e){return '{}'}})()";
+    browser.evaluateJavascript(js,encoded->{
+      try{
+        JSONObject data=new JSONObject(new JSONArray("["+encoded+"]").getString(0));
+        Intent outcome=new Intent();
+        outcome.putExtra("page",getIntent().getStringExtra("url"));
+        outcome.putExtra("videoCount",data.optInt("videoCount"));
+        outcome.putExtra("mediaCount",data.optInt("mediaCount"));
+        outcome.putExtra("readyState",data.optInt("readyState"));
+        outcome.putExtra("playerControls",data.optBoolean("playerControls"));
+        outcome.putExtra("mediaDetected",data.optBoolean("mediaDetected"));
+        setResult(RESULT_OK,outcome);
+        finish();
+      }catch(Exception ex){Toast.makeText(this,"Não foi possível salvar: "+ex.getMessage(),Toast.LENGTH_LONG).show();}
+    });
+  }
   @Override public void onBackPressed(){if(browser!=null&&browser.canGoBack())browser.goBack();else super.onBackPressed();}
   @Override protected void onDestroy(){if(browser!=null)browser.destroy();super.onDestroy();}
 }
