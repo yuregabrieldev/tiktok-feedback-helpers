@@ -219,7 +219,7 @@ public class MainActivityV19 extends MainActivityV18 {
         f.readyState=Math.max(f.readyState,obj.optInt("ready"));
         f.playerControls|=obj.optBoolean("controls");
         if(f.mediaElements>0 && f.readyState>=2)f.status="MIDIA_DETECTADA";
-        else if(last) f.status=(f.playerControls||f.videoCount>0)?"INTERACAO_NECESSARIA":"PLAYER_SEM_FONTE";
+        else if(last && !f.status.startsWith("HTTP_") && !"ERRO_CARREGAMENTO".equals(f.status)) f.status=(f.playerControls||f.videoCount>0)?"INTERACAO_NECESSARIA":"PLAYER_SEM_FONTE";
         f.updatedAt=System.currentTimeMillis();refresh();
       }catch(Exception ignored){}
     });
