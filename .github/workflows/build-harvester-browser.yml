@@ -19,6 +19,7 @@ jobs:
           cat browser-build/payload*.txt | base64 -d > /tmp/harvester-browser.txz
           echo "16c4c729912997bdfe5ce85adb2d8acb00a311146f49951993d950c9b500b1fb  /tmp/harvester-browser.txz" | sha256sum -c -
           tar -xJf /tmp/harvester-browser.txz -C browser-app
+          sed -i "s/CookieManager.getInstance()/android.webkit.CookieManager.getInstance()/g" browser-app/app/src/main/java/com/harvester/browser/MainActivity.java
           test -f browser-app/app/src/main/AndroidManifest.xml
       - uses: actions/setup-java@v4
         with:
