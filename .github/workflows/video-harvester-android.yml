@@ -1,4 +1,4 @@
-name: Build Video Harvester v2.6
+name: Build Video Harvester v2.7
 
 on:
   push:
@@ -24,15 +24,15 @@ jobs:
         working-directory: video-harvester-android
         run: gradle :app:assembleDebug --stacktrace
       - name: Prepare APK
-        run: cp video-harvester-android/app/build/outputs/apk/debug/app-debug.apk Video-Harvester-v2.6.apk
+        run: cp video-harvester-android/app/build/outputs/apk/debug/app-debug.apk Video-Harvester-v2.7.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: Video-Harvester-v2.6
-          path: Video-Harvester-v2.6.apk
+          name: Video-Harvester-v2.7
+          path: Video-Harvester-v2.7.apk
       - uses: softprops/action-gh-release@v2
         with:
-          tag_name: video-harvester-v2.6
-          name: Video Harvester v2.6
+          tag_name: video-harvester-v2.7
+          name: Video Harvester v2.7
           body: >-
-            User-initiated download metadata, script inventory and session-safe video references. Existing media playback tests remain. No automatic access-gate bypass.
-          files: Video-Harvester-v2.6.apk
+            Single user-confirmed popup preview and session-safe download diagnosis. Existing playback tests remain.
+          files: Video-Harvester-v2.7.apk
