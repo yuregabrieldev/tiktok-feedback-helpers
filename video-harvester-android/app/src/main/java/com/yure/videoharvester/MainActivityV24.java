@@ -200,7 +200,7 @@ public class MainActivityV24 extends MainActivityV22 {
       }catch(Exception e){title="Vídeo encontrado";}
     }
     inspectedUrl=url;
-    Intent i=new Intent(this,PlayerInspectorActivityV27.class);
+    Intent i=new Intent(this,PlayerInspectorActivityV28.class);
     i.putExtra("url",url);
     i.putExtra("sourcePage",parent);
     i.putExtra("mediaTitle",title);
