@@ -117,11 +117,12 @@ public class MainActivityV18 extends MainActivityV17 {
   }
   boolean eligible(Hit h){return "IFRAME".equals(h.type)&&!unwanted(h)&&h.url.startsWith("http");}
   @Override void addHit(String t,String u,String p,String d,int depth){
+    if(u==null||u.trim().isEmpty())return;
     if("IFRAME".equals(t) && unwanted(new Hit(t,u,p,d,depth)))return;
     super.addHit(t,u,p,d,depth);
   }
   @Override void enqueueFrame(String url,int depth,String parent){
-    if(unwanted(new Hit("IFRAME",url,parent,"queue",depth)))return;
+    if(url==null||unwanted(new Hit("IFRAME",url,parent,"queue",depth)))return;
     super.enqueueFrame(url,depth,parent);
   }
   @Override void refresh(){
@@ -235,6 +236,17 @@ public class MainActivityV18 extends MainActivityV17 {
           if(!unwanted(hit))clean.put(entry);
         }
         backup.put("discovered",clean);
+      }
+      JSONArray references=backup.optJSONArray("playbackReferences");
+      if(references!=null){
+        JSONArray cleanReferences=new JSONArray();
+        for(int j=0;j<references.length();j++){
+          JSONObject reference=references.optJSONObject(j);if(reference==null)continue;
+          if("iframe_reference".equals(reference.optString("type"))
+              && unwanted(new Hit("IFRAME",reference.optString("iframe"),reference.optString("page"),"backup",0)))continue;
+          cleanReferences.put(reference);
+        }
+        backup.put("playbackReferences",cleanReferences);
       }
       JSONArray players=new JSONArray();
       for(Hit hit:hits.values()){
