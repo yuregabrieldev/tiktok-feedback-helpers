@@ -1,4 +1,4 @@
-name: Build Video Harvester v2.4
+name: Build Video Harvester v2.5
 
 on:
   push:
@@ -24,14 +24,14 @@ jobs:
         working-directory: video-harvester-android
         run: gradle :app:assembleDebug --stacktrace
       - name: Prepare APK
-        run: cp video-harvester-android/app/build/outputs/apk/debug/app-debug.apk Video-Harvester-v2.4.apk
+        run: cp video-harvester-android/app/build/outputs/apk/debug/app-debug.apk Video-Harvester-v2.5.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: Video-Harvester-v2.4
-          path: Video-Harvester-v2.4.apk
+          name: Video-Harvester-v2.5
+          path: Video-Harvester-v2.5.apk
       - uses: softprops/action-gh-release@v2
         with:
-          tag_name: video-harvester-v2.4
-          name: Video Harvester v2.4
-          body: Fast paginated iframe discoveries, searchable manual queue inspector, post-play HTML5 observation sent directly to Videos for review, and session-safe source references.
-          files: Video-Harvester-v2.4.apk
+          tag_name: video-harvester-v2.5
+          name: Video Harvester v2.5
+          body: Playback test buttons in Videos and Library: open original iframe in WebView or test direct media in Android player, and save separate playback statuses. No ad or access-gate automation.
+          files: Video-Harvester-v2.5.apk
