@@ -24,6 +24,15 @@ public class MainActivityV22 extends MainActivityV21 {
   @Override void buildUi(){
     ui22=false;
     super.buildUi();
+    // Android 15+ may draw behind the status bar: reserve the actual inset.
+    if(root21!=null&&toolbar21!=null){
+      root21.setOnApplyWindowInsetsListener((v,insets)->{
+        int top=insets.getSystemWindowInsetTop();
+        toolbar21.setPadding(dp(13),top+dp(12),dp(13),dp(10));
+        return insets;
+      });
+      root21.requestApplyInsets();
+    }
     // Highlight measured progress instead of using lengthy paragraphs.
     if(progress!=null){
       progress.setProgressTintList(ColorStateList.valueOf(SUCCESS_GREEN));
