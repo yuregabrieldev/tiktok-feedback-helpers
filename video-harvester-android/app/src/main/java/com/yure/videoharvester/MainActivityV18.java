@@ -137,11 +137,13 @@ public class MainActivityV18 extends MainActivityV17 {
     }
     if(playerSummary!=null) {
       int total=0, inspected=0, withMedia=0;
+      HashSet<String> mediaPages=new HashSet<>();
+      for(Hit media:hits.values())if(isMedia(media.type))mediaPages.add(media.page);
       for(Hit h:hits.values()){
         if(!eligible(h)||!playerLike(h.url))continue;
         total++;
         if(frameSeen.contains("1|"+h.url))inspected++;
-        for(Hit media:hits.values())if(media.page.equals(h.url)&&isMedia(media.type)){withMedia++;break;}
+        if(mediaPages.contains(h.url))withMedia++;
       }
       playerSummary.setText("Players relevantes: "+total+"  •  Analisados: "+inspected+
           "  •  Com mídia candidata: "+withMedia+"\nSalvar referências não baixa os arquivos de vídeo.");
