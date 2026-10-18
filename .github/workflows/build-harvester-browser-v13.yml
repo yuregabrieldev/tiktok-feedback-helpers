@@ -1,0 +1,70 @@
+name: Build Harvester Browser v1.3.0 Auto Player Scanner
+on:
+  push:
+    branches: [harvester-browser-autoscan]
+    paths:
+      - 'harvester-browser-v13/**'
+      - '.github/workflows/build-harvester-browser-v13.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Restore source package and verify integrity
+        run: |
+          cat harvester-browser-v13/payload*.txt | base64 -d > /tmp/harvester-browser-v13.tar.xz
+          echo "6b318defc91789e960f5c0863c4dfc36f3e25af339927ec13e16aab2a62b07ce  /tmp/harvester-browser-v13.tar.xz" | sha256sum -c -
+          tar -xJf /tmp/harvester-browser-v13.tar.xz
+          test -f HarvesterBrowser/app/src/main/assets/autoplayer.js
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Find Android SDK
+        run: |
+          echo "ANDROID_HOME=${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}" >> "$GITHUB_ENV"
+          SDKMANAGER=$(find /usr/local/lib/android/sdk -type f -name sdkmanager -print -quit)
+          test -n "$SDKMANAGER"
+          echo "SDKMANAGER=$SDKMANAGER" >> "$GITHUB_ENV"
+      - name: Install Android SDK 36
+        run: |
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" 'platforms;android-36' 'build-tools;36.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.6.0'
+      - name: Test scanner, media and consent rules
+        working-directory: HarvesterBrowser
+        run: |
+          mkdir -p /tmp/hb-tests
+          javac -d /tmp/hb-tests app/src/main/java/com/harvester/browser/core/*.java core-tests/CoreTests.java
+          java -cp /tmp/hb-tests CoreTests
+          node --check app/src/main/assets/autoplayer.js
+      - name: Build APK
+        working-directory: HarvesterBrowser
+        run: gradle :app:assembleDebug --stacktrace --no-daemon
+      - name: Verify output
+        run: |
+          cp HarvesterBrowser/app/build/outputs/apk/debug/app-debug.apk Harvester-Browser-v1.3.0.apk
+          test -s Harvester-Browser-v1.3.0.apk
+          sha256sum Harvester-Browser-v1.3.0.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Harvester-Browser-v1.3.0-APK
+          path: Harvester-Browser-v1.3.0.apk
+          if-no-files-found: error
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: harvester-browser-v1.3.0
+          target_commitish: harvester-browser-autoscan
+          name: Harvester Browser v1.3.0 - Auto Player Scanner
+          body: |
+            Auto Player Scanner: opt-in exact-host player interactions, automatic passive capture,
+            automatic saving to local library, DOM/performance/video event inspection,
+            protected-content diagnostic and safer popup handling.
+            No login/DRM bypass or guaranteed detection of third-party players.
+          files: Harvester-Browser-v1.3.0.apk
