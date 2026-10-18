@@ -27,19 +27,19 @@ jobs:
       - name: Compile installable APK
         run: gradle --no-daemon :app:assembleDebug --stacktrace
       - name: Rename output
-        run: cp app/build/outputs/apk/debug/app-debug.apk WiFiTVHub-Universal.apk
+        run: cp app/build/outputs/apk/debug/app-debug.apk WiFiTVHub-Universal-v1.1.0.apk
       - uses: actions/upload-artifact@v4
         with:
           name: WiFiTVHub-Universal-APK
-          path: WiFiTVHub-Universal.apk
+          path: WiFiTVHub-Universal-v1.1.0.apk
           retention-days: 30
       - name: Publish direct APK download
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="wifi-tv-hub-v1.0.0"
+          TAG="wifi-tv-hub-v1.1.0"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" WiFiTVHub-Universal.apk --clobber
+            gh release upload "$TAG" WiFiTVHub-Universal-v1.1.0.apk --clobber
           else
-            gh release create "$TAG" WiFiTVHub-Universal.apk --title "WiFi TV Hub v1.0.0" --notes "APK Android universal para celular e Android TV. É uma versão inicial funcional, compilada com assinatura debug, ainda sem teste físico." --target "$GITHUB_SHA"
+            gh release create "$TAG" WiFiTVHub-Universal-v1.1.0.apk --title "WiFi TV Hub v1.1.0" --notes "v1.1.0: descoberta automática do aplicativo na TV via mDNS, reconhecimento de Google Cast, lista Bluetooth pareada, modo TV manual. APK debug ainda sem testes em aparelhos físicos. Para atualização, pode ser necessário remover v1.0 devido à assinatura de debug." --target "$GITHUB_SHA"
           fi

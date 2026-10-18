@@ -1,6 +1,11 @@
 package com.wifitvhub.universal;
 
 import android.app.*;
+import android.bluetooth.BluetoothAdapter;
+import android.bluetooth.BluetoothDevice;
+import android.bluetooth.BluetoothManager;
+import android.content.pm.PackageManager;
+import android.Manifest;
 import android.os.*;
 import android.app.UiModeManager;
 import android.content.*;
@@ -17,9 +22,12 @@ import java.util.*;
 import java.util.concurrent.*;
 
 public class MainActivity extends Activity {
- LinearLayout panel;TextView info;EditText host,pin;HubServer server;ExecutorService pool=Executors.newSingleThreadExecutor();android.content.SharedPreferences prefs;
+ LinearLayout panel, discoveryList; TextView info, discoveryStatus; EditText host,pin; HubServer server; TvDiscovery discovery;
+ android.net.nsd.NsdManager.RegistrationListener tvRegistration;
+ ExecutorService pool=Executors.newSingleThreadExecutor(); android.content.SharedPreferences prefs;
+ final Set<String> knownDevices=new HashSet<>();
  boolean tv=false;
- @Override public void onCreate(Bundle b){super.onCreate(b);prefs=getSharedPreferences("hub",0);UiModeManager ui=(UiModeManager)getSystemService(UI_MODE_SERVICE);tv=ui.getCurrentModeType()==Configuration.UI_MODE_TYPE_TELEVISION;show();}
+ @Override public void onCreate(Bundle b){super.onCreate(b);prefs=getSharedPreferences("hub",0);UiModeManager ui=(UiModeManager)getSystemService(UI_MODE_SERVICE);tv=ui.getCurrentModeType()==Configuration.UI_MODE_TYPE_TELEVISION || prefs.getBoolean("force_tv",false);show();}
  LinearLayout page(){panel=new LinearLayout(this);panel.setOrientation(1);panel.setPadding(28,24,28,28);panel.setBackgroundColor(Color.rgb(239,244,251));ScrollView s=new ScrollView(this);s.addView(panel);setContentView(s);return panel;}
  void title(String s){TextView t=new TextView(this);t.setText(s);t.setTextSize(24);t.setTextColor(Color.rgb(26,39,68));t.setPadding(2,14,2,12);panel.addView(t);}
  EditText edit(String hint,String initial){EditText e=new EditText(this);e.setSingleLine(true);e.setHint(hint);e.setText(initial);panel.addView(e);return e;}
@@ -29,9 +37,14 @@ public class MainActivity extends Activity {
  void tvPage(){
   String p=prefs.getString("pin",null);if(p==null){p=String.valueOf(100000+new java.security.SecureRandom().nextInt(900000));prefs.edit().putString("pin",p).apply();}
   label("MODO TV · Hisense Android TV e outras Android/Google TV");
+  button("Este aparelho é um celular? Voltar ao modo celular",()->{if(server!=null){server.stop();server=null;}TvDiscovery.unregister(this,tvRegistration);tvRegistration=null;prefs.edit().putBoolean("force_tv",false).apply();tv=false;show();});
   label("IP: "+localIP()+":8787");label("PIN: "+p);
   label("Mantenha esta tela aberta durante a transferência. Celular e TV precisam estar na mesma rede Wi-Fi.");
-  try{server=new HubServer(getApplicationContext(),p);server.start();label("Servidor Wi-Fi iniciado.");}catch(Exception e){label("Falha no servidor: "+e.getMessage());}
+  try{
+   if(server==null){server=new HubServer(getApplicationContext(),p);server.start();}
+   if(tvRegistration==null)tvRegistration=TvDiscovery.register(this,"WiFi TV Hub - "+android.os.Build.MODEL,8787);
+   label("Servidor Wi-Fi ativo e anunciado na rede. O celular pode encontrar esta TV automaticamente.");
+  }catch(Exception e){label("Falha no servidor: "+e.getMessage());}
   button("Abrir navegador",()->startActivity(new Intent(this,BrowserActivity.class)));
   button("Ver aplicativos",()->showLocalApps());
   button("Ver arquivos recebidos",()->{
@@ -43,9 +56,18 @@ public class MainActivity extends Activity {
  String localIP(){try{Enumeration<NetworkInterface> all=NetworkInterface.getNetworkInterfaces();while(all.hasMoreElements()){NetworkInterface ni=all.nextElement();Enumeration<InetAddress> ips=ni.getInetAddresses();while(ips.hasMoreElements()){InetAddress i=ips.nextElement();if(i instanceof Inet4Address&&!i.isLoopbackAddress())return i.getHostAddress();}}}catch(Exception ignored){}return "IP desconhecido";}
  void showLocalApps(){android.content.pm.PackageManager pm=getPackageManager();Intent q=new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER);List<android.content.pm.ResolveInfo> apps=pm.queryIntentActivities(q,0);String[] names=new String[apps.size()];for(int i=0;i<apps.size();i++)names[i]=apps.get(i).loadLabel(pm).toString();new AlertDialog.Builder(this).setTitle("Aplicativos").setItems(names,(d,i)->{Intent launch=pm.getLaunchIntentForPackage(apps.get(i).activityInfo.packageName);if(launch!=null)startActivity(launch);}).setNegativeButton("Voltar",null).show();}
  void phonePage(){
-  label("MODO CELULAR · Primeiro instale este APK também na Android TV, depois conecte pelo Wi-Fi.");
-  host=edit("IP da TV, ex.: 192.168.1.50",prefs.getString("ip",""));pin=edit("PIN mostrado na televisão","");
-  info=new TextView(this);info.setText("Informe o IP e o PIN da televisão.");info.setTextSize(16);info.setPadding(4,16,4,16);panel.addView(info);
+  label("MODO CELULAR · Busque a TV na rede, sem precisar descobrir o IP.");
+  label("Para transferir arquivos ou instalar APKs, abra o WiFi TV Hub também na Hisense. Google Cast sozinho só permite funções de transmissão compatíveis.");
+  button("Esta é a televisão? Abrir modo TV",()->{prefs.edit().putBoolean("force_tv",true).apply();tv=true;show();});
+  title("Buscar televisões próximas");
+  button("Buscar automaticamente por Wi-Fi e Google Cast",()->startDiscovery());
+  discoveryStatus=new TextView(this);discoveryStatus.setText("Buscando dispositivos na mesma rede Wi-Fi...");
+  discoveryStatus.setPadding(4,8,4,8);panel.addView(discoveryStatus);
+  discoveryList=new LinearLayout(this);discoveryList.setOrientation(1);panel.addView(discoveryList);
+  button("Ver dispositivos pareados por Bluetooth",()->showBluetoothDevices());
+  title("Parear com a TV");
+  host=edit("IP da TV (preenchido ao selecionar um dispositivo)",prefs.getString("ip",""));pin=edit("PIN mostrado no aplicativo da televisão","");
+  info=new TextView(this);info.setText("Selecione uma TV encontrada, introduza o PIN e toque em Parear.");info.setTextSize(16);info.setPadding(4,16,4,16);panel.addView(info);
   button("Parear com a TV",()->{String h=host.getText().toString().trim(),p=pin.getText().toString().trim();run(()->{String res=request(h,"POST","/pair",new JSONObject().put("pin",p).toString().getBytes("UTF-8"));String token=new JSONObject(res).getString("token");prefs.edit().putString("ip",h).putString("token",token).apply();return "Conectado à TV: "+h;});});
   button("Testar conexão",()->command("GET","/status",null));
   title("Controle da TV");
@@ -59,6 +81,56 @@ public class MainActivity extends Activity {
   button("Listar arquivos na TV",()->command("GET","/files",null));
   button("Solicitar instalação de APK na TV",()->prompt("Nome do APK recebido","app.apk",v->{try{command("POST","/install",new JSONObject().put("name",v).toString());}catch(Exception e){message(e.toString());}}));
   label("Instalação de APK requer autorização e confirmação no Android TV. Esta versão depende do aplicativo WiFi TV Hub aberto na televisão.");
+  new Handler(getMainLooper()).postDelayed(()->{if(!tv && !isFinishing())startDiscovery();},350);
+ }
+ void startDiscovery(){
+  if(tv)return;
+  if(discovery!=null){discovery.stop();discovery=null;}
+  knownDevices.clear();if(discoveryList!=null)discoveryList.removeAllViews();
+  if(discoveryStatus!=null)discoveryStatus.setText("Procurando TVs na rede Wi-Fi... (serviço WiFi TV Hub e Google Cast)");
+  discovery=new TvDiscovery(this,new TvDiscovery.Callback(){
+   @Override public void onFound(String name,String address,boolean hub){runOnUiThread(()->showFoundDevice(name,address,hub));}
+   @Override public void onStatus(String detail){runOnUiThread(()->{if(discoveryStatus!=null)discoveryStatus.setText(detail);});}
+  });
+  discovery.start();
+ }
+ void showFoundDevice(String name,String address,boolean hub){
+  if(discoveryList==null || tv)return;
+  String key=(hub?"hub:":"cast:")+address;
+  if(!knownDevices.add(key))return;
+  if(discoveryStatus!=null)discoveryStatus.setText(knownDevices.size()+" dispositivo(s) encontrado(s). Selecione a sua televisão.");
+  buttonFor(discoveryList,(hub?"TV com WiFi TV Hub: ":"Google Cast: ")+name+" ("+address+")",()->{
+   if(hub){
+    host.setText(address);prefs.edit().putString("ip",address).remove("token").apply();
+    message("TV selecionada: "+name+". Introduza o PIN mostrado na TV e toque em Parear.");
+   }else{
+    new AlertDialog.Builder(this).setTitle("Google Cast encontrado")
+     .setMessage(name+" foi identificado na rede, mas o Cast não permite instalar APKs nem fornece controle remoto universal. Para transferir arquivos, instale e abra o WiFi TV Hub na televisão. Ela aparecerá como 'TV com WiFi TV Hub'.")
+     .setPositiveButton("Entendi",null).show();
+   }
+  });
+ }
+ void buttonFor(LinearLayout parent,String text,Runnable action){
+  Button b=new Button(this);b.setText(text);b.setAllCaps(false);b.setOnClickListener(v->action.run());parent.addView(b);
+ }
+ void showBluetoothDevices(){
+  if(android.os.Build.VERSION.SDK_INT>=31 && checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT)!=PackageManager.PERMISSION_GRANTED){
+   requestPermissions(new String[]{Manifest.permission.BLUETOOTH_CONNECT},88);return;
+  }
+  try{
+   BluetoothManager mgr=(BluetoothManager)getSystemService(BLUETOOTH_SERVICE);
+   BluetoothAdapter a=mgr==null?null:mgr.getAdapter();
+   if(a==null){message("Bluetooth indisponível neste celular.");return;}
+   Set<BluetoothDevice> bonded=a.getBondedDevices();
+   StringBuilder result=new StringBuilder();
+   if(bonded!=null)for(BluetoothDevice device:bonded){result.append(device.getName()==null?"Dispositivo sem nome":device.getName()).append("\\n");}
+   String list=result.length()==0?"Nenhum dispositivo pareado com este celular.":"Dispositivos já pareados:\\n"+result;
+   new AlertDialog.Builder(this).setTitle("Bluetooth").setMessage(list+"\\nO Bluetooth permite reconhecer aparelhos pareados, mas a maioria das TVs não expõe comandos de instalação ou controle através dele. Use Wi-Fi para as funções do WiFi TV Hub.").setPositiveButton("OK",null).show();
+  }catch(Exception e){message("Não foi possível ler dispositivos Bluetooth: "+e.getMessage());}
+ }
+ @Override public void onRequestPermissionsResult(int req,String[] permissions,int[] grants){
+  super.onRequestPermissionsResult(req,permissions,grants);
+  if(req==88 && grants.length>0 && grants[0]==PackageManager.PERMISSION_GRANTED)showBluetoothDevices();
  }
  interface Value{void accept(String s);}
  void prompt(String title,String initial,Value fn){EditText e=new EditText(this);e.setSingleLine();e.setText(initial);new AlertDialog.Builder(this).setTitle(title).setView(e).setPositiveButton("Enviar",(d,w)->fn.accept(e.getText().toString())).setNegativeButton("Cancelar",null).show();}
@@ -81,5 +153,5 @@ public class MainActivity extends Activity {
   try(InputStream in=getContentResolver().openInputStream(uri);OutputStream out=c.getOutputStream()){byte[] buf=new byte[65536];int n;while((n=in.read(buf))>0)out.write(buf,0,n);}
   int code=c.getResponseCode();c.disconnect();if(code>=400)throw new IOException("Falha no envio: HTTP "+code);return "Arquivo enviado: "+name;
  });}
- @Override protected void onDestroy(){if(server!=null)server.stop();pool.shutdownNow();super.onDestroy();}
+ @Override protected void onDestroy(){if(discovery!=null)discovery.stop();TvDiscovery.unregister(this,tvRegistration);if(server!=null)server.stop();pool.shutdownNow();super.onDestroy();}
 }
