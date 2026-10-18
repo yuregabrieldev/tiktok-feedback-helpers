@@ -1,0 +1,72 @@
+name: Build Harvester Browser v1.5.0 Cast
+on:
+  push:
+    branches: [harvester-browser-v15-cast]
+    paths:
+      - harvester-browser/v1.5.0/**
+      - .github/workflows/harvester-browser-v15-cast.yml
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Restore verified v1.4 project and apply Cast integration
+        run: |
+          mkdir -p hb-v15
+          cat harvester-browser/v1.4.0/payload*.txt | base64 --decode > /tmp/harvester-v14.txz
+          echo "2676ef48fb053bf276281e08745f29e7c184658cd2edfa0bb2a084c7379af2a2  /tmp/harvester-v14.txz" | sha256sum -c -
+          tar -xJf /tmp/harvester-v14.txz -C hb-v15
+          echo "97e43ab4f90eb24f24afb373677f070b78c4cfe741ad79bdf50e0b1f232fb235  harvester-browser/v1.5.0/cast-patch.xz.b64" | sha256sum -c -
+          base64 -d harvester-browser/v1.5.0/cast-patch.xz.b64 | xz -d > /tmp/cast-patch.py
+          (cd hb-v15 && python3 /tmp/cast-patch.py)
+          grep -q "versionName '1.5.0'" hb-v15/app/build.gradle
+      - name: Locate Android SDK
+        run: |
+          echo "ANDROID_HOME=${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}" >> "$GITHUB_ENV"
+          SDKMANAGER=$(find /usr/local/lib/android/sdk -type f -name sdkmanager -print -quit)
+          test -n "$SDKMANAGER"
+          echo "SDKMANAGER=$SDKMANAGER" >> "$GITHUB_ENV"
+      - name: Install Android SDK
+        run: |
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" 'platforms;android-36' 'build-tools;36.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.6.0'
+      - name: Test scanner, crawler and Cast policy
+        working-directory: hb-v15
+        run: |
+          mkdir -p /tmp/hb15-tests
+          javac -d /tmp/hb15-tests app/src/main/java/com/harvester/browser/core/*.java core-tests/CoreTests.java
+          java -cp /tmp/hb15-tests CoreTests
+      - name: Compile debug APK
+        working-directory: hb-v15
+        run: gradle :app:assembleDebug --stacktrace --no-daemon
+      - name: Verify and stage APK
+        run: |
+          test -s hb-v15/app/build/outputs/apk/debug/app-debug.apk
+          cp hb-v15/app/build/outputs/apk/debug/app-debug.apk Harvester-Browser-v1.5.0-Cast.apk
+          sha256sum Harvester-Browser-v1.5.0-Cast.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Harvester-Browser-v1.5.0-Cast
+          path: Harvester-Browser-v1.5.0-Cast.apk
+          if-no-files-found: error
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: harvester-browser-v1.5.0
+          name: Harvester Browser v1.5.0 — Google Cast
+          body: |
+            Experimental official Cast integration for detected HTTPS MP4/WebM/HLS/DASH video links.
+            Cast route picker, remote play/pause/stop/disconnect, safe confirmation for unverified links.
+            Cast-enabled TV/Chromecast and Google Play services required; cookie- or IP-bound links may fail.
+            Debug APK. Physical TV playback has not been verified.
+          files: Harvester-Browser-v1.5.0-Cast.apk
