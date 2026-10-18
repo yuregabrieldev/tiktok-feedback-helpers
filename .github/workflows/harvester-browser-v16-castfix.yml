@@ -1,0 +1,18 @@
+name: Inspect Harvester Cast integration
+on:
+  push:
+    branches: [harvester-browser-v16-castfix]
+    paths: [.github/workflows/harvester-browser-v16-castfix.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Decode original integration for diagnostic review
+        run: |
+          base64 -d harvester-browser/v1.5.0/cast-patch.xz.b64 | xz -d > /tmp/cast-patch.py
+          wc -l -c /tmp/cast-patch.py
+          sed -n '1,420p' /tmp/cast-patch.py
