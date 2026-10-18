@@ -1,18 +1,79 @@
-name: Inspect Harvester Cast integration
+name: Build Harvester Browser v1.6.0 Cast Hotfix
 on:
   push:
     branches: [harvester-browser-v16-castfix]
-    paths: [.github/workflows/harvester-browser-v16-castfix.yml]
+    paths:
+      - harvester-browser/v1.6.0/**
+      - .github/workflows/harvester-browser-v16-castfix.yml
   workflow_dispatch:
 permissions:
-  contents: read
+  contents: write
 jobs:
-  inspect:
+  android:
     runs-on: ubuntu-latest
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
-      - name: Decode original integration for diagnostic review
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Restore verified v1.4 base
         run: |
-          base64 -d harvester-browser/v1.5.0/cast-patch.xz.b64 | xz -d > /tmp/cast-patch.py
-          wc -l -c /tmp/cast-patch.py
-          sed -n '1,420p' /tmp/cast-patch.py
+          mkdir -p hb-v16
+          cat harvester-browser/v1.4.0/payload*.txt | base64 --decode > /tmp/harvester-v14.txz
+          echo "2676ef48fb053bf276281e08745f29e7c184658cd2edfa0bb2a084c7379af2a2  /tmp/harvester-v14.txz" | sha256sum -c -
+          tar -xJf /tmp/harvester-v14.txz -C hb-v16
+      - name: Apply official Google Cast integration
+        run: |
+          echo "97e43ab4f90eb24f24afb373677f070b78c4cfe741ad79bdf50e0b1f232fb235  harvester-browser/v1.5.0/cast-patch.xz.b64" | sha256sum -c -
+          base64 -d harvester-browser/v1.5.0/cast-patch.xz.b64 | xz -d > /tmp/cast-v15.py
+          (cd hb-v16 && python3 /tmp/cast-v15.py)
+      - name: Apply Cast crash hotfix and per-video buttons
+        run: |
+          (cd hb-v16 && python3 ../harvester-browser/v1.6.0/fix-cast.py)
+          grep -q 'extends androidx.fragment.app.FragmentActivity' hb-v16/app/src/main/java/com/harvester/browser/MainActivity.java
+          grep -q "versionName '1.6.0'" hb-v16/app/build.gradle
+          grep -q 'addCastQuickAction' hb-v16/app/src/main/java/com/harvester/browser/MainActivity.java
+      - name: Locate Android SDK
+        run: |
+          echo "ANDROID_HOME=${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}" >> "$GITHUB_ENV"
+          SDKMANAGER=$(find /usr/local/lib/android/sdk -type f -name sdkmanager -print -quit)
+          test -n "$SDKMANAGER"
+          echo "SDKMANAGER=$SDKMANAGER" >> "$GITHUB_ENV"
+      - name: Install Android SDK
+        run: |
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" 'platforms;android-36' 'build-tools;36.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.6.0'
+      - name: Validate existing extractor, crawler and Cast policy
+        working-directory: hb-v16
+        run: |
+          mkdir -p /tmp/hb16-tests
+          javac -d /tmp/hb16-tests app/src/main/java/com/harvester/browser/core/*.java core-tests/CoreTests.java
+          java -cp /tmp/hb16-tests CoreTests
+      - name: Compile Android APK
+        working-directory: hb-v16
+        run: gradle :app:assembleDebug --stacktrace --no-daemon
+      - name: Prepare and verify APK
+        run: |
+          test -s hb-v16/app/build/outputs/apk/debug/app-debug.apk
+          cp hb-v16/app/build/outputs/apk/debug/app-debug.apk Harvester-Browser-v1.6.0-Cast-Fix.apk
+          sha256sum Harvester-Browser-v1.6.0-Cast-Fix.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Harvester-Browser-v1.6.0-Cast-Fix
+          path: Harvester-Browser-v1.6.0-Cast-Fix.apk
+          if-no-files-found: error
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: harvester-browser-v1.6.0
+          name: Harvester Browser v1.6.0 — Cast crash hotfix
+          body: |
+            Fix potential Chromecast chooser crash: MediaRouteButton requires FragmentActivity,
+            not platform Activity. Adds per-video Cast shortcut buttons to detected-video
+            list and saved library. Preserves existing scanner, navigation and crawler.
+            APK is debug-signed and has not yet been tested on a physical TV.
+          files: Harvester-Browser-v1.6.0-Cast-Fix.apk
