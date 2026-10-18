@@ -1,4 +1,4 @@
-name: Build Video Harvester v1.6
+name: Build Video Harvester v1.7
 
 on:
   push:
@@ -24,14 +24,14 @@ jobs:
         working-directory: video-harvester-android
         run: gradle :app:assembleDebug --stacktrace
       - name: Prepare APK
-        run: cp video-harvester-android/app/build/outputs/apk/debug/app-debug.apk Video-Harvester-v1.6.apk
+        run: cp video-harvester-android/app/build/outputs/apk/debug/app-debug.apk Video-Harvester-v1.7.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: Video-Harvester-v1.6
-          path: Video-Harvester-v1.6.apk
+          name: Video-Harvester-v1.7
+          path: Video-Harvester-v1.7.apk
       - uses: softprops/action-gh-release@v2
         with:
-          tag_name: video-harvester-v1.6
-          name: Video Harvester v1.6
-          body: Incremental crawling, imported iframe reanalysis, copyable diagnostics and refreshed mobile UI.
-          files: Video-Harvester-v1.6.apk
+          tag_name: video-harvester-v1.7
+          name: Video Harvester v1.7
+          body: White and wine premium UI, faster automatic HTML5 iframe analysis, incremental scan, session-safe playback references, backup import/export and copyable inspector reports.
+          files: Video-Harvester-v1.7.apk
