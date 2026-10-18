@@ -1,4 +1,4 @@
-name: Build Video Harvester v1.9
+name: Build Video Harvester v2.0
 
 on:
   push:
@@ -24,14 +24,14 @@ jobs:
         working-directory: video-harvester-android
         run: gradle :app:assembleDebug --stacktrace
       - name: Prepare APK
-        run: cp video-harvester-android/app/build/outputs/apk/debug/app-debug.apk Video-Harvester-v1.9.apk
+        run: cp video-harvester-android/app/build/outputs/apk/debug/app-debug.apk Video-Harvester-v2.0.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: Video-Harvester-v1.9
-          path: Video-Harvester-v1.9.apk
+          name: Video-Harvester-v2.0
+          path: Video-Harvester-v2.0.apk
       - uses: softprops/action-gh-release@v2
         with:
-          tag_name: video-harvester-v1.9
-          name: Video Harvester v1.9
-          body: Visible WebView iframe diagnostics, playback state tracking, assisted inspection, persistent backup history and wine design. No automated ad-gate bypass.
-          files: Video-Harvester-v1.9.apk
+          tag_name: video-harvester-v2.0
+          name: Video Harvester v2.0
+          body: Classify active HTML5 videos, empty video elements and Google IMA ad iframes; keep per-player diagnostic history and wine interface.
+          files: Video-Harvester-v2.0.apk
