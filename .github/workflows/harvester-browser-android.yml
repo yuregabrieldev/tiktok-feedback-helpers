@@ -1,4 +1,4 @@
-name: Build Harvester Browser v1.1.0
+name: Build Harvester Browser v1.2.0
 on:
   push:
     branches:
@@ -39,6 +39,8 @@ jobs:
         run: |
           base64 -d harvester-browser/source-v1.1.0.tar.xz.b64 > /tmp/harvester-browser-source.tar.xz
           tar -xJf /tmp/harvester-browser-source.tar.xz
+          base64 -d harvester-browser/ui-v12.patch.xz.b64 | xz -d | patch -p1
+          grep -q "versionName '1.2.0'" HarvesterBrowser/app/build.gradle
           test -f HarvesterBrowser/app/build.gradle
       - name: Test media scanner and crawler safety
         working-directory: HarvesterBrowser
@@ -50,20 +52,20 @@ jobs:
         working-directory: HarvesterBrowser
         run: gradle :app:assembleDebug --stacktrace
       - name: Prepare APK
-        run: cp HarvesterBrowser/app/build/outputs/apk/debug/app-debug.apk Harvester-Browser-v1.1.0.apk
+        run: cp HarvesterBrowser/app/build/outputs/apk/debug/app-debug.apk Harvester-Browser-v1.2.0.apk
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Harvester-Browser-v1.1.0
-          path: Harvester-Browser-v1.1.0.apk
+          name: Harvester-Browser-v1.2.0
+          path: Harvester-Browser-v1.2.0.apk
       - name: Publish APK release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: harvester-browser-v1.1.0
-          name: Harvester Browser v1.1.0
+          tag_name: harvester-browser-v1.2.0
+          name: Harvester Browser v1.2.0
           body: |
-            Browser update: Chrome-style grouped menu, Safari-inspired translucency,
-            search at top, keyboard resize/dismiss handling, optional popup blocking,
-            separated observed/reference media URLs, HTTPS source check, and metadata when available.
+            Browser update 1.2: dark Chrome-like top bar with home, pill search,
+            new tab, tab counter, grouped menu, Safari-inspired translucent surfaces,
+            preserved inspection and video detector, keyboard and popup toggle.
             Debug signed APK for Android 8.0+.
-          files: Harvester-Browser-v1.1.0.apk
+          files: Harvester-Browser-v1.2.0.apk
