@@ -14,7 +14,7 @@ import java.util.*;
 public class MainActivityV16 extends MainActivityV15 {
   boolean importedPending=false;
   boolean stateReady=false;
-  int skipped=0;
+  int skipped=0, batchCount=0;
   @Override void buildUi(){
     super.buildUi();
     renameTitle16((ViewGroup)findViewById(android.R.id.content));
@@ -78,6 +78,7 @@ public class MainActivityV16 extends MainActivityV15 {
       pageLimit=Math.max(1,Math.min(5000,Integer.parseInt(limitBox.getText().toString().trim())));
       maxDepth=Math.max(0,Math.min(10,Integer.parseInt(depthBox.getText().toString().trim())));
     }catch(Exception e){toast("Endereço ou configuração inválidos");return;}
+    batchCount=0;skipped=0;
     // No destructive clear: preserve imported discoveries, catalogue and seen URLs.
     if(siteQueue.isEmpty()){enqueueSite(raw);discoverSitemap(raw);}
     // Queue known uninspected iframe entries, without forcing playback/access gating.
@@ -91,7 +92,7 @@ public class MainActivityV16 extends MainActivityV15 {
     if(!scanning)return;
     // Limit counts processed in *this* batch; preserve seen pages across sessions.
     Task t=null;
-    while(!siteQueue.isEmpty()&&skipped<20000&&siteSeen.size()<pageLimit){
+    while(!siteQueue.isEmpty()&&skipped<20000&&batchCount<pageLimit){
       Task q=siteQueue.poll();queuedSite.remove(q.url);
       if(!siteSeen.contains(q.url)){t=q;break;}skipped++;
     }
@@ -103,9 +104,9 @@ public class MainActivityV16 extends MainActivityV15 {
     }
     if(t==null){stopScan("Concluído. "+siteSeen.size()+" páginas acumuladas.");showCatalog();return;}
     current=t;currentPage=t.url;
-    if("SITE".equals(t.kind))siteSeen.add(t.url);else frameSeen.add(t.key());
+    if("SITE".equals(t.kind)){siteSeen.add(t.url);batchCount++;}else frameSeen.add(t.key());
     status.setText(("SITE".equals(t.kind)?"Página ":"Iframe ") + t.url);
-    progress.setProgress((int)Math.min(100,siteSeen.size()*100.0/pageLimit));refresh();
+    progress.setProgress((int)Math.min(100,batchCount*100.0/pageLimit));refresh();
     web.loadUrl(t.url);
     if((siteSeen.size()+frameSeen.size())%30==0)saveScan();
   }
@@ -123,6 +124,6 @@ public class MainActivityV16 extends MainActivityV15 {
   @Override void saveScan(){super.saveScan();saveCrawlState();}
   @Override void refresh(){
     super.refresh();
-    if(count!=null)count.setText("Páginas: "+siteSeen.size()+"/"+pageLimit+" • pendentes: "+siteQueue.size()+" • iframes: "+hits.values().stream().filter(h->"IFRAME".equals(h.type)).count()+" • fontes: "+catalog.size());
+    if(count!=null)count.setText("Páginas acumuladas: "+siteSeen.size()+" • lote: "+batchCount+"/"+pageLimit+" • pendentes: "+siteQueue.size()+" • iframes: "+hits.values().stream().filter(h->"IFRAME".equals(h.type)).count()+" • fontes: "+catalog.size());
   }
 }
