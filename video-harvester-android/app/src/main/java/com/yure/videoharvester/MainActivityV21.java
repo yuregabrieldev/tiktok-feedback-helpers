@@ -353,8 +353,29 @@ public class MainActivityV21 extends MainActivityV20 {
 
   @Override void nextTask(){
     if(!scanning)return;
-    if(runMode==1&&siteQueue.isEmpty()){
-      stopScan("Páginas concluídas. Encaminhe os iframes descobertos.");
+    if(runMode==1){
+      Task next=null;
+      while(!siteQueue.isEmpty() && batchCount<pageLimit && skipped<20000){
+        Task candidate=siteQueue.poll();
+        queuedSite.remove(candidate.url);
+        if(!siteSeen.contains(candidate.url)){next=candidate;break;}
+        skipped++;
+      }
+      if(next==null){
+        stopScan("Páginas concluídas. Envie os iframes à Análise para continuar.");
+        return;
+      }
+      current=next;currentPage=next.url;
+      siteSeen.add(next.url);batchCount++;
+      scanSerial++;
+      status.setText("Página "+batchCount+"/"+pageLimit+": "+next.url);
+      progress.setProgress((int)Math.min(100,batchCount*100.0/pageLimit));
+      refresh();web.loadUrl(next.url);
+      final Task task=next;final int serial=scanSerial;
+      ui.postDelayed(()->{
+        if(scanning && runMode==1 && current==task && scanSerial==serial)nextTask();
+      },14000);
+      if(batchCount%30==0)saveScan();
       return;
     }
     super.nextTask();
