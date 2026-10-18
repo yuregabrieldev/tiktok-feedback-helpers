@@ -4,6 +4,7 @@ import android.app.*;
 import android.os.*;
 import android.content.*;
 import android.graphics.Color;
+import android.graphics.drawable.GradientDrawable;
 import android.webkit.*;
 import android.view.*;
 import android.widget.*;
@@ -15,18 +16,21 @@ public class PlayerInspectorActivity extends Activity {
   WebView browser; TextView info; String snapshot=""; String report=""; int popups=0, requests=0; String lastError="";
   final Handler ui=new Handler(Looper.getMainLooper());
   int dp(int n){return (int)(n*getResources().getDisplayMetrics().density+.5f);}
+  GradientDrawable bg(int c){GradientDrawable d=new GradientDrawable();d.setColor(c);d.setCornerRadius(dp(14));return d;}
+  void style(Button b,boolean primary){b.setAllCaps(false);b.setTextSize(12);b.setTextColor(primary?Color.WHITE:0xff651F36);b.setBackground(bg(primary?0xff651F36:0xffF4E9ED));}
   @Override public void onCreate(Bundle b){
     super.onCreate(b);
     String url=getIntent().getStringExtra("url");if(url==null)url="about:blank";
-    LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setBackgroundColor(0xff14181b);
-    TextView title=new TextView(this);title.setText("Inspecionar player • v1.6");title.setTextColor(-1);title.setTextSize(19);title.setPadding(dp(12),dp(8),dp(8),dp(5));root.addView(title);
-    info=new TextView(this);info.setTextColor(0xffcad1df);info.setTextSize(12);info.setPadding(dp(12),0,dp(8),dp(7));info.setText("Aguardando página...");root.addView(info);
+    LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setBackgroundColor(0xffF8F5F6);
+    TextView title=new TextView(this);title.setText("Inspecionar player • v1.7");title.setTextColor(0xff651F36);title.setTextSize(19);title.setPadding(dp(12),dp(8),dp(8),dp(5));root.addView(title);
+    info=new TextView(this);info.setTextColor(0xff352B30);info.setTextSize(12);info.setPadding(dp(12),0,dp(8),dp(7));info.setText("Aguardando página...");root.addView(info);
     LinearLayout bar=new LinearLayout(this);
     Button inspect=new Button(this);inspect.setText("Capturar DOM");bar.addView(inspect,new LinearLayout.LayoutParams(0,dp(52),1));
     Button save=new Button(this);save.setText("Exportar HTML");bar.addView(save,new LinearLayout.LayoutParams(0,dp(52),1));
     Button summary=new Button(this);summary.setText("Relatório");bar.addView(summary,new LinearLayout.LayoutParams(0,dp(52),1));
+    style(inspect,true);style(save,false);style(summary,false);
     root.addView(bar);
-    Button copy=new Button(this);copy.setText("Copiar relatório");root.addView(copy,new LinearLayout.LayoutParams(-1,dp(46)));
+    Button copy=new Button(this);copy.setText("Copiar relatório");style(copy,false);root.addView(copy,new LinearLayout.LayoutParams(-1,dp(46)));
     copy.setOnClickListener(v->{if(report.isEmpty()){capture(false);return;}((android.content.ClipboardManager)getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(ClipData.newPlainText("Video Harvester - diagnóstico",report));Toast.makeText(this,"Relatório copiado",Toast.LENGTH_SHORT).show();});
     browser=new WebView(this);root.addView(browser,new LinearLayout.LayoutParams(-1,0,1));setContentView(root);
     WebSettings s=browser.getSettings();s.setJavaScriptEnabled(true);s.setDomStorageEnabled(true);s.setMediaPlaybackRequiresUserGesture(false);
