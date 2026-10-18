@@ -19,6 +19,7 @@ public class MainActivityV17 extends MainActivityV16 {
   TextView pageStat,frameStat,sourceStat,queueStat,section,helper;
   boolean onlyFrames=false;
   int visibleHits=65;
+  long lastBackupMillis=0;
   String activeTab="descobertos";
   LinearLayout body;
 
@@ -110,7 +111,7 @@ public class MainActivityV17 extends MainActivityV16 {
     refresh();loadScan();restoreCrawlState();stateReady=true;
     if(hits.size()>0)showHits();else showWelcome();
   }
-  @Override public void onCreate(Bundle b){super.onCreate(b);if(hits.size()>0)status.setText("Projeto restaurado • "+hits.size()+" resultados disponíveis");}
+  @Override public void onCreate(Bundle b){super.onCreate(b);getWindow().setStatusBarColor(CANVAS);getWindow().setNavigationBarColor(CANVAS);getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR|View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);if(hits.size()>0)status.setText("Projeto restaurado • "+hits.size()+" resultados disponíveis");}
   View gap(int h){View v=new View(this);v.setLayoutParams(new LinearLayout.LayoutParams(1,dp(h)));return v;}
   LinearLayout panel(int color){LinearLayout p=new LinearLayout(this);p.setOrientation(LinearLayout.VERTICAL);p.setPadding(dp(15),dp(15),dp(15),dp(15));p.setBackground(rounded(color,20));p.setElevation(dp(2));return p;}
   TextView heading(String s,int size){TextView t=tv(s,size,INK);t.setTypeface(null,1);return t;}
@@ -198,6 +199,11 @@ public class MainActivityV17 extends MainActivityV16 {
     if(t==null){stopScan("Reanálise concluída");showHits();return;}
     current=t;currentPage=t.url;frameSeen.add(t.key());status.setText("Iframe: "+t.url);refresh();web.loadUrl(t.url);
   }
+  @Override void saveScan(){
+    long now=android.os.SystemClock.elapsedRealtime();
+    if(scanning && now-lastBackupMillis<9000)return;
+    lastBackupMillis=now;super.saveScan();
+  }
   @Override JSONObject buildBackup(){
     JSONObject obj=super.buildBackup();
     try{
@@ -207,6 +213,13 @@ public class MainActivityV17 extends MainActivityV16 {
         JSONObject r=new JSONObject();r.put("type","iframe_reference");r.put("page",h.page);r.put("iframe",h.url);r.put("status","reference_only");r.put("playback_url",JSONObject.NULL);references.put(r);
       }
       // Never promise URL renewal without an authorized provider integration.
+      for(Hit h:hits.values())if("MEDIA_CANDIDATE".equals(h.type)||"MP4".equals(h.type)||"HLS".equals(h.type)||"DASH".equals(h.type)){
+        JSONObject r=new JSONObject();r.put("type","media_candidate");r.put("page",h.page);
+        r.put("format",h.type);r.put("status","requires_validation_and_rights");
+        r.put("source_host",Uri.parse(h.url).getHost());
+        r.put("requires_session",h.url.contains("ip_bind=")||h.url.contains("token=")||h.url.contains("signature="));
+        r.put("playback_url",JSONObject.NULL);references.put(r);
+      }
       obj.put("playbackReferences",references);
       obj.put("resolverVersion",1);
     }catch(Exception ignored){}
@@ -228,7 +241,7 @@ public class MainActivityV17 extends MainActivityV16 {
       @Override public WebResourceResponse shouldInterceptRequest(WebView view,WebResourceRequest request){
         String url=request.getUrl().toString();
         // Network hits are candidates; a WebView request alone doesn't prove playback.
-        if(url.matches("(?i)^https?://.+\\\\.(m3u8|mpd|mp4|m4v|webm)(\\\\?.*)?$"))
+        if(url.toLowerCase(java.util.Locale.ROOT).matches("^https?://.+[.](m3u8|mpd|mp4|m4v|webm)([?].*)?$"))
           addHit("MEDIA_CANDIDATE",url,currentPage,"network",current==null?0:current.depth);
         return super.shouldInterceptRequest(view,request);
       }
