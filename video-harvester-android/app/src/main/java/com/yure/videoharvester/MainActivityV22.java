@@ -19,6 +19,7 @@ public class MainActivityV22 extends MainActivityV21 {
   ProgressBar iframeProgress22;
   boolean detailMode22=false;
   boolean ui22=false;
+  boolean simplePlayback22=false;
 
   @Override void buildUi(){
     ui22=false;
@@ -181,6 +182,44 @@ public class MainActivityV22 extends MainActivityV21 {
     super.navigate(index);
     if(index==1)showDashboard22();
     refresh();
+  }
+
+  @Override void createSettingsPage(){
+    super.createSettingsPage();
+    LinearLayout mode=sectionCard(settingsBody,"Automação de reprodução",
+      "Em páginas com vídeo HTML5 direto, a aplicação pode tentar iniciar a reprodução quando a fonte já está disponível. Não clica em anúncios, CAPTCHA ou bloqueios.");
+    simplePlayback22=getSharedPreferences("vh22",0).getBoolean("simplePlayback",false);
+    CheckBox toggle=new CheckBox(this);
+    toggle.setText("Tentar Play automático em HTML5 direto e autorizado");
+    toggle.setTextSize(13);toggle.setTextColor(INK);
+    toggle.setButtonTintList(ColorStateList.valueOf(WINE));
+    toggle.setChecked(simplePlayback22);
+    toggle.setOnCheckedChangeListener((button,isChecked)->{
+      simplePlayback22=isChecked;
+      getSharedPreferences("vh22",0).edit().putBoolean("simplePlayback",isChecked).apply();
+      if(web!=null)web.getSettings().setMediaPlaybackRequiresUserGesture(!isChecked);
+    });
+    mode.addView(toggle);
+    mode.addView(tv("Esta opção não automatiza etapas de acesso ou publicidade. Funciona apenas em vídeos HTML5 diretos.",11,FAINT));
+  }
+
+  @Override void setupWeb(){
+    super.setupWeb();
+    simplePlayback22=getSharedPreferences("vh22",0).getBoolean("simplePlayback",false);
+    web.getSettings().setMediaPlaybackRequiresUserGesture(!simplePlayback22);
+  }
+
+  @Override void inspectDom(android.webkit.WebView view,Task task,int sequence,boolean last){
+    if(simplePlayback22&&scanning&&current==task&&scanSerial==sequence&&"IFRAME".equals(task.kind)){
+      String simpleScript="(function(){try{"+
+        "if(document.querySelector('.video-js,.vjs-big-play-button,#rcEmbedCaptureShield,.captcha_button,[data-rc-embed-capture],iframe[src*=imasdk],iframe[src*=doubleclick]'))return 'gated_or_player_library';"+
+        "const v=document.querySelector('video[controls][src]');"+
+        "if(!v||!/^https?:/i.test(v.currentSrc||v.src||'')||v.readyState<2)return 'no_direct_media';"+
+        "if(v.paused){v.play().catch(()=>{});return 'requested_play'}return 'already_playing';"+
+        "}catch(e){return 'not_supported'}})()";
+      view.evaluateJavascript(simpleScript,null);
+    }
+    super.inspectDom(view,task,sequence,last);
   }
   @Override void showHits(){
     if(!ui22)return;
