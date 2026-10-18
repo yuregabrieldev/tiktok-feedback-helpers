@@ -1,4 +1,4 @@
-name: Build Video Harvester v2.2
+name: Build Video Harvester v2.3
 
 on:
   push:
@@ -24,14 +24,14 @@ jobs:
         working-directory: video-harvester-android
         run: gradle :app:assembleDebug --stacktrace
       - name: Prepare APK
-        run: cp video-harvester-android/app/build/outputs/apk/debug/app-debug.apk Video-Harvester-v2.2.apk
+        run: cp video-harvester-android/app/build/outputs/apk/debug/app-debug.apk Video-Harvester-v2.3.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: Video-Harvester-v2.2
-          path: Video-Harvester-v2.2.apk
+          name: Video-Harvester-v2.3
+          path: Video-Harvester-v2.3.apk
       - uses: softprops/action-gh-release@v2
         with:
-          tag_name: video-harvester-v2.2
-          name: Video Harvester v2.2
-          body: Simplified iframe dashboard with green percentage and verified statuses, compact discovery list, Android insets, and optional direct HTML5 autoplay without ad-gate interactions.
-          files: Video-Harvester-v2.2.apk
+          tag_name: video-harvester-v2.3
+          name: Video Harvester v2.3
+          body: Improved automatic HTML5 and Video.js playback when media is already available, status tracking for source readiness and access gates, and persistent playback attempt diagnostics. No ad-gate automation.
+          files: Video-Harvester-v2.3.apk
