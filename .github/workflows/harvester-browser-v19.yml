@@ -35,7 +35,7 @@ jobs:
           (cd hb-v18 && python3 ../harvester-browser/v1.7.0/now-playing-cast.py)
       - name: Integrate local video playback and cast
         run: |
-          (cd hb-v18 && python3 ../harvester-browser/v1.9.0/install-player.py)
+          (cd hb-v18 && python3 ../harvester-browser/v1.8.0/install-player.py)
           grep -q "versionName '1.8.0'" hb-v18/app/build.gradle
           grep -q 'class NativePlayerActivity' hb-v18/app/src/main/java/com/harvester/browser/NativePlayerActivity.java
       - name: Install safe player and receiver-state Cast diagnostics
