@@ -54,7 +54,7 @@ public final class NativePlayerActivity extends FragmentActivity {
     };
     private TextView localState,castState,headline;
     private MediaRouteButton castButton;
-    private boolean castInitialized=false,castPending=false;
+    private boolean castInitialized=false,castPending=false,castListenerRegistered=false;
     private String mediaUrl,mediaTitle,mediaFormat;
     private long pendingPosition=0L;
     private boolean attemptSent=false;
@@ -243,6 +243,7 @@ public final class NativePlayerActivity extends FragmentActivity {
                 @Override public void onSessionSuspended(CastSession session,int code){
                     castOnUi("Sessão Cast suspensa");}
             };
+            registerCastListener();
             cast("Cast disponível. Toca em Transmitir à TV para procurar dispositivos.");
         }catch(RuntimeException | LinkageError ex){
             saveError("Cast setup",ex);
@@ -375,16 +376,23 @@ public final class NativePlayerActivity extends FragmentActivity {
             cast("Reprodução na TV parada");
         }catch(RuntimeException ex){saveError("Stop Cast",ex);cast("Erro: "+errorName(ex));}
     }
+    private void registerCastListener(){
+        if(castContext==null||castListener==null||castListenerRegistered)return;
+        try{
+            castContext.getSessionManager().addSessionManagerListener(castListener,CastSession.class);
+            castListenerRegistered=true;
+            if(castPending)sendVideo();
+        }catch(RuntimeException ex){saveError("Cast session listener",ex);}
+    }
     @Override protected void onStart(){
         super.onStart();
-        if(castContext!=null&&castListener!=null)
-            try{castContext.getSessionManager().addSessionManagerListener(castListener,CastSession.class);}
-            catch(RuntimeException ex){saveError("Cast session listener",ex);}
+        registerCastListener();
     }
     @Override protected void onStop(){
-        if(castContext!=null&&castListener!=null)
+        if(castContext!=null&&castListener!=null&&castListenerRegistered)
             try{castContext.getSessionManager().removeSessionManagerListener(castListener,CastSession.class);}
             catch(RuntimeException ignored){}
+        castListenerRegistered=false;
         super.onStop();
     }
     @Override protected void onDestroy(){
