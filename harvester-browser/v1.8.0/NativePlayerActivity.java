@@ -108,6 +108,18 @@ public final class NativePlayerActivity extends FragmentActivity {
         try{
             cast=CastContext.getSharedInstance(this);
             CastButtonFactory.setUpMediaRouteButton(getApplicationContext(),routeButton);
+            // Tapping the Cast icon (not only the text) must also select the active video.
+            // Do not consume the event: the official button still opens device selection.
+            routeButton.setOnTouchListener((view,event)->{
+                if(event.getAction()==android.view.MotionEvent.ACTION_DOWN){
+                    pendingCast=true;sent=false;
+                }
+                return false;
+            });
+            if(android.os.Build.VERSION.SDK_INT>=33 &&
+               checkSelfPermission("android.permission.NEARBY_WIFI_DEVICES")!=android.content.pm.PackageManager.PERMISSION_GRANTED){
+                requestPermissions(new String[]{"android.permission.NEARBY_WIFI_DEVICES"},890);
+            }
             listener=new SessionManagerListener<CastSession>(){
                 @Override public void onSessionStarting(CastSession s){}
                 @Override public void onSessionStarted(CastSession s,String id){sendCast();}
