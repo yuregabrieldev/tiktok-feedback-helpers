@@ -1,0 +1,56 @@
+name: Smoke test Harvester native player on Android emulator
+on:
+  workflow_dispatch:
+  push:
+    branches: [harvester-browser-v19-player-stability]
+    paths:
+      - .github/workflows/harvester-browser-v19-emulator.yml
+permissions:
+  contents: read
+jobs:
+  emulator:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Download verified release APK
+        run: |
+          curl -fL --retry 3 --retry-delay 3 \
+            -o /tmp/Harvester.apk \
+            https://github.com/yuregabrieldev/tiktok-feedback-helpers/releases/download/harvester-browser-v1.9.0/Harvester-Browser-v1.9.0-Player-Cast-Fix.apk
+          echo "287beb3502b55dd0cc6b238cbf6b6c349e19f6859fed91038c1d50d65f4cd62b  /tmp/Harvester.apk" | sha256sum -c -
+      - name: Launch browser and native player on emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          ram-size: 2048M
+          heap-size: 256M
+          disable-animations: true
+          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          script: |
+            adb install -r /tmp/Harvester.apk
+            adb shell am start -n com.harvester.browser/.MainActivity
+            sleep 8
+            adb shell pidof com.harvester.browser
+            adb shell am start -n com.harvester.browser/.NativePlayerActivity \
+              --es url 'https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4' \
+              --es title 'Native video smoke test' \
+              --es format mp4
+            sleep 12
+            echo '=== Foreground activity ==='
+            adb shell dumpsys activity activities | grep -E 'mResumedActivity|topResumedActivity|NativePlayerActivity' | head -15
+            echo '=== Process state ==='
+            adb shell pidof com.harvester.browser
+            echo '=== AndroidRuntime fatal exceptions ==='
+            adb logcat -d -v brief -s AndroidRuntime:E > /tmp/androidruntime.txt
+            if grep -E 'FATAL EXCEPTION|Process: com.harvester.browser' /tmp/androidruntime.txt; then
+              cat /tmp/androidruntime.txt
+              exit 1
+            fi
+            echo 'No Java FATAL EXCEPTION recorded for Harvester Browser'
