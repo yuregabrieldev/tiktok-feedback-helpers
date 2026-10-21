@@ -1,0 +1,34 @@
+name: Inspect Cast & Playback v1.6 source
+on:
+  workflow_dispatch:
+  push:
+    branches: [harvester-browser-v17-playback-cast]
+    paths: [.github/workflows/inspect-hb-v17.yml]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reconstitute v1.6
+        run: |
+          mkdir hb
+          cat harvester-browser/v1.4.0/payload*.txt | base64 -d | xz -d | tar -xf - -C hb
+          base64 -d harvester-browser/v1.5.0/cast-patch.xz.b64 | xz -d > /tmp/cast.py
+          (cd hb && python3 /tmp/cast.py && python3 ../harvester-browser/v1.6.0/fix-cast.py)
+      - name: Print relevant Android sources
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('hb/app/src/main/java/com/harvester/browser/MainActivity.java')
+          s=p.read_text().splitlines()
+          keys=['class MainActivity','showCastControls','requestCast(','sendPendingCast(','addCastQuickAction','initCast(','onCreate(','onStart(','currentTab','activeTab','getCurrentUrl','onPageFinished(','setWebChromeClient','MediaItem','WebView','mediaDetails(','renderDetected','showMedia','onShowCustomView','PermissionRequest']
+          for i,line in enumerate(s):
+            if any(x in line for x in keys):
+              print('%4d %s'%(i+1,line[:260]))
+          print('======== Manifest ========')
+          print(Path('hb/app/src/main/AndroidManifest.xml').read_text()[:7000])
+          print('======== gradle ========')
+          print(Path('hb/app/build.gradle').read_text()[:6000])
+          PY
