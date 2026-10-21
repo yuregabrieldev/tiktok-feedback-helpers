@@ -1,0 +1,76 @@
+name: Build Harvester Browser v1.7.0 — Transmitir Vídeo Atual
+on:
+  push:
+    branches: [harvester-browser-v17-playback-cast]
+    paths:
+      - harvester-browser/v1.7.0/**
+      - .github/workflows/harvester-browser-v17.yml
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Reconstruct stable baseline v1.4.0
+        run: |
+          mkdir -p hb
+          cat harvester-browser/v1.4.0/payload*.txt | base64 -d > /tmp/hb-v14.tar.xz
+          echo "2676ef48fb053bf276281e08745f29e7c184658cd2edfa0bb2a084c7379af2a2  /tmp/hb-v14.tar.xz" | sha256sum -c -
+          tar -xJf /tmp/hb-v14.tar.xz -C hb
+      - name: Apply Cast v1.5, selector hotfix v1.6, active playback v1.7
+        run: |
+          echo "97e43ab4f90eb24f24afb373677f070b78c4cfe741ad79bdf50e0b1f232fb235  harvester-browser/v1.5.0/cast-patch.xz.b64" | sha256sum -c -
+          base64 -d harvester-browser/v1.5.0/cast-patch.xz.b64 | xz -d > /tmp/hbcast.py
+          (cd hb && python3 /tmp/hbcast.py)
+          (cd hb && python3 ../harvester-browser/v1.6.0/fix-cast.py)
+          (cd hb && python3 ../harvester-browser/v1.7.0/now-playing-cast.py)
+          grep -q "versionName '1.7.0'" hb/app/build.gradle
+          grep -q 'castCurrentPlayback' hb/app/src/main/java/com/harvester/browser/MainActivity.java
+      - name: Locate Android SDK and install platform
+        run: |
+          echo "ANDROID_HOME=${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}" >> "$GITHUB_ENV"
+          SDKMANAGER=$(find /usr/local/lib/android/sdk -type f -name sdkmanager -print -quit)
+          test -n "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" 'platforms;android-36' 'build-tools;36.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.6.0'
+      - name: Run extraction crawler and Cast source policy tests
+        working-directory: hb
+        run: |
+          mkdir -p /tmp/hb-tests
+          javac -d /tmp/hb-tests app/src/main/java/com/harvester/browser/core/*.java core-tests/CoreTests.java
+          java -cp /tmp/hb-tests CoreTests
+      - name: Compile Android APK
+        working-directory: hb
+        run: gradle :app:assembleDebug --stacktrace --no-daemon
+      - name: Verify APK
+        run: |
+          test -s hb/app/build/outputs/apk/debug/app-debug.apk
+          cp hb/app/build/outputs/apk/debug/app-debug.apk Harvester-Browser-v1.7.0-Now-Playing-Cast.apk
+          sha256sum Harvester-Browser-v1.7.0-Now-Playing-Cast.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Harvester-Browser-v1.7.0-Now-Playing-Cast
+          path: Harvester-Browser-v1.7.0-Now-Playing-Cast.apk
+          if-no-files-found: error
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: harvester-browser-v1.7.0
+          name: Harvester Browser v1.7.0 — Now Playing Cast
+          body: |
+            Adds "Transmitir vídeo atual" action for active HTML5 media, source
+            selection fallback, resume position, nearby-devices permission entry,
+            and safer default Google Cast receiver options. Includes v1.6 chooser
+            crash fix, detected-media and library Cast shortcut buttons.
+            Google Cast receiver required. TV needs direct access to video URLs;
+            no session/DRM bypass. Android TV playback remains unverified.
+          files: Harvester-Browser-v1.7.0-Now-Playing-Cast.apk
