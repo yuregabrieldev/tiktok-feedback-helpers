@@ -17,6 +17,7 @@ code=(vista/'MainActivity.java').read_text()
 assert 'public final class MainActivity extends AppCompatActivity' in code
 code=code.replace('package com.vistacast.app;', 'package com.harvester.browser;',1)
 code=code.replace('MainActivity', 'NativePlayerActivity')
+code=code.replace('public final class NativePlayerActivity extends AppCompatActivity {','public final class NativePlayerActivity extends AppCompatActivity {\n    public static final String TEST_VIDEO = "https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4";',1)
 code=code.replace('▶  VistaCast','▶  VistaCast Player')
 # External URL comes from Harvester detected video/library, and is not a gallery file.
 code=code.replace('    private boolean fullscreen;', '''    private boolean fullscreen;
