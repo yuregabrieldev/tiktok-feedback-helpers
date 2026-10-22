@@ -52,6 +52,7 @@ once('        web.setDownloadListener((link,ua,disposition,mime,len)->download(l
                 }
                 if(fresh)onNativePlaybackRequested(tab,"");
             },3800);
+            return false;
         });''',"iframe touch and network fallback")
 once('        web.setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_BOUND,true);',
 '        web.setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_BOUND,false);',
