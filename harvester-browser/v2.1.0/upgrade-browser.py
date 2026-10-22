@@ -27,7 +27,7 @@ once('    private boolean popupBlocked=true;',
 once('        popupBlocked=settings.getBoolean("block_popups",true);',
 '''        popupBlocked=settings.getBoolean("block_popups",true);
         autoOpenPlayerOnPlay=settings.getBoolean("auto_open_player_on_play",true);''',"restore user setting")
-once('        s.setSupportMultipleWindows(true);',
+once('s.setSupportMultipleWindows(true);',
 '''        s.setSupportMultipleWindows(true);
         // Lower pressure from content-heavy websites and inactive renderers.
         s.setOffscreenPreRaster(false);''',"webview settings")
