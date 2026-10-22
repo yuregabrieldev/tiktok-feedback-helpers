@@ -31,6 +31,28 @@ once('s.setSupportMultipleWindows(true);',
 '''        s.setSupportMultipleWindows(true);
         // Lower pressure from content-heavy websites and inactive renderers.
         s.setOffscreenPreRaster(false);''',"webview settings")
+once('        web.setDownloadListener((link,ua,disposition,mime,len)->download(link,ua,disposition,mime));',
+'''        web.setDownloadListener((link,ua,disposition,mime,len)->download(link,ua,disposition,mime));
+        // Complementary detection for players inside cross-origin iframes:
+        // observe new media requests AFTER a real touch; never click or inspect frames.
+        web.setOnTouchListener((view,motion)->{
+            if(motion.getAction()!=android.view.MotionEvent.ACTION_UP ||
+               !autoOpenPlayerOnPlay || selected!=tab)return false;
+            final long touchedAt=System.currentTimeMillis();
+            final int epoch=tab.scanEpoch;
+            autoHandler.postDelayed(()->{
+                if(selected!=tab || tab.web==null || tab.scanEpoch!=epoch ||
+                   !tabs.contains(tab) || !autoOpenPlayerOnPlay)return;
+                java.util.Map<String,Long> times=detectedTimes.get(tab);
+                if(times==null)return;
+                boolean fresh=false;
+                for(Long recorded:times.values()){
+                    if(recorded!=null && recorded>=touchedAt-300 &&
+                       recorded<=System.currentTimeMillis()){fresh=true;break;}
+                }
+                if(fresh)onNativePlaybackRequested(tab,"");
+            },3800);
+        });''',"iframe touch and network fallback")
 once('        web.setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_BOUND,true);',
 '        web.setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_BOUND,false);',
 "render process memory priority")
