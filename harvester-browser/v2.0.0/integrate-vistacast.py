@@ -1,6 +1,6 @@
 from pathlib import Path
 
-harvester=Path('hb')
+harvester=Path('hb-v18')
 vistacast=Path('vista')
 base=harvester/'app/src/main/java/com/harvester/browser'
 vista=vistacast/'app/src/main/java/com/vistacast/app'
@@ -138,7 +138,7 @@ for permission in ['android.permission.FOREGROUND_SERVICE',
                    'android.permission.READ_EXTERNAL_STORAGE']:
     if permission not in m:
         attrib=(' android:maxSdkVersion="32"' if permission.endswith("READ_EXTERNAL_STORAGE") else "")
-        m=m.replace('    <application',f'    <uses-permission android:name="{permission}"{attrib} />\\n    <application',1)
+        m=m.replace('    <application',f'    <uses-permission android:name="{permission}"{attrib} />\n    <application',1)
 manifest.write_text(m)
 
 gradle=harvester/'app/build.gradle'
