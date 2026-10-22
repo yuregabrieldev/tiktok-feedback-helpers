@@ -94,6 +94,26 @@ once('        menuEntry(box,"◎","Estado do Auto Player Scanner",this::showAuto
             getSharedPreferences("harvester-settings",MODE_PRIVATE).edit()
                 .putBoolean("auto_open_player_on_play",v).apply();
         });''',"auto open toggle")
+once('        intent.putExtra("position_ms",Math.max(0L,resumeMs));',
+'''        intent.putExtra("position_ms",Math.max(0L,resumeMs));
+        // Prevent browser video and native player from running in parallel.
+        if(selected!=null && selected.web!=null){
+            try{selected.web.evaluateJavascript(
+                "(function(){document.querySelectorAll('video').forEach(function(v){try{v.pause();}catch(e){}});})()",null);
+            }catch(Exception ignored){}
+        }''',"pause browser video before native player")
+once('    @Override protected void onDestroy(){',
+'''    @Override protected void onPause(){
+        if(selected!=null && selected.web!=null)
+            try{selected.web.onPause();}catch(RuntimeException ignored){}
+        super.onPause();
+    }
+    @Override protected void onResume(){
+        super.onResume();
+        if(selected!=null && selected.web!=null)
+            try{selected.web.onResume();}catch(RuntimeException ignored){}
+    }
+    @Override protected void onDestroy(){''',"browser activity lifecycle")
 once('        tab.web=null;tab.scanEpoch++;',
 '''        tab.web=null;tab.scanEpoch++;
         detectedTimes.remove(tab);lastPlayPrompt.remove(tab);''',"clean state on closing")
