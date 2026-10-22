@@ -142,6 +142,19 @@ for permission in ['android.permission.FOREGROUND_SERVICE',
         m=m.replace('    <application',f'    <uses-permission android:name="{permission}"{attrib} />\n    <application',1)
 manifest.write_text(m)
 
+# AppCompatActivity requires an AppCompat theme, unlike the browser's platform
+# Theme.Material. Scope it to VistaCast so the rest of the browser is unchanged.
+manifestText=manifest.read_text()
+manifestText=manifestText.replace('android:name=".NativePlayerActivity"',
+    'android:name=".NativePlayerActivity" android:theme="@style/VistaCastTheme"',1)
+manifest.write_text(manifestText)
+styles=harvester/'app/src/main/res/values/styles.xml'
+styleCode=styles.read_text()
+if 'name="VistaCastTheme"' not in styleCode:
+    styleCode=styleCode.replace('</resources>',
+        '    <style name="VistaCastTheme" parent="Theme.AppCompat.DayNight.NoActionBar" />\n</resources>',1)
+    styles.write_text(styleCode)
+
 gradle=harvester/'app/build.gradle'
 g=gradle.read_text()
 if "versionName '1.9.0'" not in g: raise RuntimeError('Harvester v1.9 source not found')
