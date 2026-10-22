@@ -47,12 +47,12 @@ jobs:
       - name: Restore actual VistaCast source
         run: |
           mkdir -p vista
-          base64 -d harvester-browser/v2.1.0/vistacast-base.tar.xz.b64 | xz -d | tar -xf - -C vista
+          base64 -d harvester-browser/v2.0.0/vistacast-base.tar.xz.b64 | xz -d | tar -xf - -C vista
           test -f vista/app/src/main/java/com/vistacast/app/PlaybackService.java
           test -f vista/app/src/main/java/com/vistacast/app/MainActivity.java
       - name: Replace Harvester player with VistaCast CastPlayer implementation
         run: |
-          python3 harvester-browser/v2.1.0/integrate-vistacast.py
+          python3 harvester-browser/v2.0.0/integrate-vistacast.py
           grep -q "versionName '2.0.0'" hb-v18/app/build.gradle
           grep -q 'MediaRouteButtonFactory' hb-v18/app/src/main/java/com/harvester/browser/NativePlayerActivity.java
           grep -q 'CastPlayer.Builder' hb-v18/app/src/main/java/com/harvester/browser/PlaybackService.java
