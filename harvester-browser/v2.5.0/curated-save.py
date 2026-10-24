@@ -36,11 +36,11 @@ one('''        TextView save=panelLabel("Guardar todas as "+found.size()+" fonte
 start=s.index("    private void showDetected(){")
 first=s.index("        for(MediaItem item:found){",start)
 finish=s.index("            panelDivider(page.body);",first)
-s=s[:finish]+'''            LinearLayout resultRow=(LinearLayout)page.body.getChildAt(page.body.getChildCount()-1);
-            resultRow.setOnClickListener(v->openNativePlayer(item));
-            resultRow.setOnLongClickListener(v->{mediaDetails(item,false);return true;});
+s=s[:finish]+'''            LinearLayout addRow=(LinearLayout)page.body.getChildAt(page.body.getChildCount()-1);
+            addRow.setOnClickListener(v->openNativePlayer(item));
+            addRow.setOnLongClickListener(v->{mediaDetails(item,false);return true;});
             TextView plus=panelIcon("+",28,"Adicionar às duas bibliotecas");
-            resultRow.addView(plus,new LinearLayout.LayoutParams(d(49),d(51)));
+            addRow.addView(plus,new LinearLayout.LayoutParams(d(49),d(51)));
             plus.setOnClickListener(v->sendToVistaStream(item,true));
 '''+s[finish:]
 
@@ -56,11 +56,18 @@ one('''        autoToggle(box,"Guardar fontes automaticamente",autoSaveEnabled,v
 '''        menuEntry(box,"＋","Guardar vídeos: apenas pelo botão +",
             ()->toast("Apenas os vídeos confirmados são adicionados à biblioteca."),popup);''',
 "remove auto save switch")
+# Existing onActivityResult manages export/downloads. Reuse it; don't declare
+# a second Java override with the same signature.
+one('''        super.onActivityResult(req,result,data);''',
+'''        super.onActivityResult(req,result,data);
+        if(req==VISTA_IMPORT_REQUEST){
+            handleVistaImportResult(result,data);
+            return;
+        }''',"hook existing activity result handler")
+
 # Cross-app editor callback. Keep video out of SQLite until Vista confirmed.
 one('''    private boolean sendToVistaStream(MediaItem item,boolean editBeforeSaving) {''',
-'''    @Override protected void onActivityResult(int requestCode,int resultCode,Intent data) {
-        super.onActivityResult(requestCode,resultCode,data);
-        if(requestCode!=VISTA_IMPORT_REQUEST)return;
+'''    private void handleVistaImportResult(int resultCode,Intent data) {
         MediaItem chosen=awaitingVistaImport;
         awaitingVistaImport=null;
         if(resultCode!=RESULT_OK||chosen==null||data==null){
