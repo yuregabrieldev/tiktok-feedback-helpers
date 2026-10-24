@@ -1,0 +1,25 @@
+name: Inspect Harvester crawler limits
+on:
+  push:
+    branches: [harvester-browser-v23-safe-traffic]
+    paths: [.github/workflows/inspect-harvester-crawler.yml]
+  workflow_dispatch:
+permissions: {contents: read}
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect crawler code without contacting external websites
+        run: |
+          mkdir -p hb
+          cat harvester-browser/v1.4.0/payload*.txt | base64 -d | tar -xJf - -C hb
+          find hb -type f -name '*.java' | sort | grep -Ei 'crawler|network|scanner|mainactivity'
+          python3 - <<'PY'
+          from pathlib import Path
+          for p in Path('hb').rglob('*.java'):
+              t=p.read_text(errors='replace')
+              if 'class DomainCrawler' in t or 'class Crawler' in t or 'class SiteCrawler' in t:
+                  print('########',p,'########')
+                  print(t[:60000])
+          PY
