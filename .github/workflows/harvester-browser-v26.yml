@@ -1,0 +1,152 @@
+name: Harvester Browser v2.6 — improved Vista matching metadata
+on:
+  push:
+    branches: [harvester-browser-v26-metadata-intent]
+    paths:
+      - harvester-browser/v2.6.0/**
+      - .github/workflows/harvester-browser-v26.yml
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Restore verified Harvester Browser v1.4 base
+        run: |
+          mkdir -p hb-v18
+          cat harvester-browser/v1.4.0/payload*.txt | base64 --decode > /tmp/hb-v14.txz
+          echo "2676ef48fb053bf276281e08745f29e7c184658cd2edfa0bb2a084c7379af2a2  /tmp/hb-v14.txz" | sha256sum -c -
+          tar -xJf /tmp/hb-v14.txz -C hb-v18
+      - name: Apply verified Cast integration v1.5
+        run: |
+          echo "97e43ab4f90eb24f24afb373677f070b78c4cfe741ad79bdf50e0b1f232fb235  harvester-browser/v1.5.0/cast-patch.xz.b64" | sha256sum -c -
+          base64 -d harvester-browser/v1.5.0/cast-patch.xz.b64 | xz -d >/tmp/cast-v15.py
+          (cd hb-v18 && python3 /tmp/cast-v15.py)
+      - name: Apply v1.6 and v1.7 improvements
+        run: |
+          (cd hb-v18 && python3 ../harvester-browser/v1.6.0/fix-cast.py)
+          (cd hb-v18 && python3 ../harvester-browser/v1.7.0/now-playing-cast.py)
+      - name: Integrate local video playback and cast
+        run: |
+          (cd hb-v18 && python3 ../harvester-browser/v1.8.0/install-player.py)
+          grep -q "versionName '1.8.0'" hb-v18/app/build.gradle
+          grep -q 'class NativePlayerActivity' hb-v18/app/src/main/java/com/harvester/browser/NativePlayerActivity.java
+      - name: Install safe player and receiver-state Cast diagnostics
+        run: |
+          (cd hb-v18 && python3 ../harvester-browser/v1.9.0/upgrade.py)
+          grep -q "versionName '1.9.0'" hb-v18/app/build.gradle
+          grep -q 'Reprodutor e Google Cast' hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java
+          grep -q 'class NativePlayerActivity' hb-v18/app/src/main/java/com/harvester/browser/NativePlayerActivity.java
+      - name: Restore actual VistaCast source
+        run: |
+          mkdir -p vista
+          base64 -d harvester-browser/v2.0.0/vistacast-base.tar.xz.b64 | xz -d | tar -xf - -C vista
+          test -f vista/app/src/main/java/com/vistacast/app/PlaybackService.java
+          test -f vista/app/src/main/java/com/vistacast/app/MainActivity.java
+      - name: Replace Harvester player with VistaCast CastPlayer implementation
+        run: |
+          python3 harvester-browser/v2.0.0/integrate-vistacast.py
+          grep -q "versionName '2.0.0'" hb-v18/app/build.gradle
+          grep -q 'MediaRouteButtonFactory' hb-v18/app/src/main/java/com/harvester/browser/NativePlayerActivity.java
+          grep -q 'CastPlayer.Builder' hb-v18/app/src/main/java/com/harvester/browser/PlaybackService.java
+      - name: Apply browser and VistaCast reliability upgrades
+        run: |
+          python3 harvester-browser/v2.1.0/upgrade-browser.py
+          python3 harvester-browser/v2.1.0/upgrade-player.py
+          grep -q "versionName '2.1.0'" hb-v18/app/build.gradle
+          grep -q 'auto_open_player_on_play' hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java
+          grep -q 'showQualitySelection' hb-v18/app/src/main/java/com/harvester/browser/NativePlayerActivity.java
+          grep -q 'Reproduzir no telemóvel' hb-v18/app/src/main/java/com/harvester/browser/NativePlayerActivity.java
+      - name: Apply per-tab navigation lock
+        run: |
+          python3 harvester-browser/v2.2.0/apply-page-lock.py
+          grep -q "versionName '2.2.0'" hb-v18/app/build.gradle
+          grep -q 'Bloquear saída da página atual' hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java
+          test -s hb-v18/app/src/main/assets/pagelock.js
+      - name: Verify page pin URL decisions
+        working-directory: hb-v18
+        run: |
+          mkdir -p /tmp/hb22-tests
+          javac -d /tmp/hb22-tests app/src/main/java/com/harvester/browser/core/PageNavigationLock.java core-tests/PageNavigationLockTests.java
+          java -cp /tmp/hb22-tests PageNavigationLockTests
+      - name: Eliminate reload loop and add bounded scan traffic protection
+        run: |
+          python3 harvester-browser/v2.3.0/safety-patch.py
+          grep -q "versionName '2.3.0'" hb-v18/app/build.gradle
+          grep -q 'HOST_PAUSE_MS' hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java
+          grep -q 'Recursos observados pelo WebView' hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java').read_text()
+          block=s.split('if(pageLockBlocks(tab,link)){',1)[1].split('tab.url=link;',1)[0]
+          assert 'w.loadUrl(target)' not in block, 'Detected obsolete navigation retry'
+          assert 'w.stopLoading()' in block
+          print('Navigation lock does not refetch blocked URL')
+          PY
+      - name: Enable official Vista Stream external player and metadata import
+        run: |
+          python3 harvester-browser/v2.4.0/bridge-vista.py
+          grep -q "versionName '2.4.0'" hb-v18/app/build.gradle
+          grep -q 'com.vistastream.tv.action.PLAY' hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java
+          grep -q 'com.vistastream.tv.action.IMPORT' hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java
+          grep -q 'Adicionar ao Vista Stream' hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java
+      - name: Apply explicit + import and save-on-confirmation
+        run: |
+          python3 harvester-browser/v2.5.0/curated-save.py
+          grep -q "versionName '2.5.0'" hb-v18/app/build.gradle
+          grep -q 'VISTA_IMPORT_REQUEST' hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java
+          grep -q 'Guardar vídeos: apenas pelo botão' hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java
+      - name: Forward page metadata to Vista Stream matcher
+        run: |
+          python3 harvester-browser/v2.6.0/improve-metadata-intent.py
+          grep -q "versionName '2.6.0'" hb-v18/app/build.gradle
+          grep -q 'yearFinder' hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java
+      - name: Install Android SDK
+        run: |
+          echo "ANDROID_HOME=${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}" >> "$GITHUB_ENV"
+          SDKMANAGER=$(find /usr/local/lib/android/sdk -type f -name sdkmanager -print -quit)
+          test -n "$SDKMANAGER"
+          echo "SDKMANAGER=$SDKMANAGER" >> "$GITHUB_ENV"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" 'platforms;android-36' 'build-tools;36.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.6.0'
+      - name: Test extraction engine and Cast eligibility
+        working-directory: hb-v18
+        run: |
+          mkdir -p /tmp/hb18-tests
+          javac -d /tmp/hb18-tests app/src/main/java/com/harvester/browser/core/*.java core-tests/CoreTests.java
+          java -cp /tmp/hb18-tests CoreTests
+      - name: Compile Android APK
+        working-directory: hb-v18
+        run: gradle :app:assembleDebug --stacktrace --no-daemon
+      - name: Stage and verify APK
+        run: |
+          test -s hb-v18/app/build/outputs/apk/debug/app-debug.apk
+          cp hb-v18/app/build/outputs/apk/debug/app-debug.apk Harvester-Browser-v2.6.0-Metadata.apk
+          sha256sum Harvester-Browser-v2.6.0-Metadata.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Harvester-Browser-v2.6.0-Metadata
+          path: Harvester-Browser-v2.6.0-Metadata.apk
+          if-no-files-found: error
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: harvester-browser-v2.6.0
+          name: Harvester Browser v2.6.0 — Vista automatic matching metadata
+          body: |
+            Independent Harvester Browser 2.6.
+            Found-video + opens the separate Vista Stream editor.
+            Sends the website's real page title and year as metadata when
+            the detected stream is named only "Video" or "HLS".
+            Nothing is saved until user confirms the Vista import.
+            Works with Vista Stream's new automatic Cinemeta/AniList matching.
+          files: Harvester-Browser-v2.6.0-Metadata.apk
