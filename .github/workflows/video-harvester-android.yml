@@ -1,4 +1,4 @@
-name: Build Video Harvester v3.0
+name: Build Simples Scraper v3.0.1
 
 on:
   push:
@@ -24,16 +24,16 @@ jobs:
         working-directory: video-harvester-android
         run: gradle :app:assembleDebug --stacktrace
       - name: Prepare APK
-        run: cp video-harvester-android/app/build/outputs/apk/debug/app-debug.apk Video-Harvester-v3.0.apk
+        run: cp video-harvester-android/app/build/outputs/apk/debug/app-debug.apk Simples-Scraper-v3.0.1.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: Video-Harvester-v3.0
-          path: Video-Harvester-v3.0.apk
+          name: Simples-Scraper-v3.0.1
+          path: Simples-Scraper-v3.0.1.apk
       - uses: softprops/action-gh-release@v2
         with:
-          tag_name: video-harvester-v3.0
+          tag_name: simples-scraper-v3.0.1
           target_commitish: ${{ github.sha }}
-          name: Video Harvester v3.0
+          name: Simples Scraper v3.0.1
           body: >-
-            Built-in opt-in Brazilian source catalog and Open Archive videos, episodic discovery and VS player integration; no DRM or restricted player bypass.
-          files: Video-Harvester-v3.0.apk
+            Simples Scraper (formerly Video Harvester), version 3.0.1. Independent website and video scraper, with experimental optional BR catalog and handoff to VS. This APK is NOT Harvester Browser; that is a separate Android project and release line.
+          files: Simples-Scraper-v3.0.1.apk

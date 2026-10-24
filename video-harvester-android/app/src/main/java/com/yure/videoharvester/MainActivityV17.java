@@ -37,8 +37,8 @@ public class MainActivityV17 extends MainActivityV16 {
     top.addView(brand,new LinearLayout.LayoutParams(dp(48),dp(48)));
     LinearLayout heading=new LinearLayout(this);heading.setOrientation(LinearLayout.VERTICAL);
     heading.setPadding(dp(12),0,0,0);
-    TextView title=tv("Video Harvester",23,INK);title.setTypeface(null,1);heading.addView(title);
-    heading.addView(tv("Studio  •  versão 1.7",12,FAINT));top.addView(heading,new LinearLayout.LayoutParams(0,-2,1));
+    TextView title=tv("Simples Scraper",23,INK);title.setTypeface(null,1);heading.addView(title);
+    heading.addView(tv("Scanner  •  versão 3.0.1",12,FAINT));top.addView(heading,new LinearLayout.LayoutParams(0,-2,1));
     TextView dot=tv("●",20,WINE);top.addView(dot);body.addView(top);
     body.addView(gap(18));
 
