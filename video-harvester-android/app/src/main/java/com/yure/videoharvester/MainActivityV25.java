@@ -76,6 +76,42 @@ public class MainActivityV25 extends MainActivityV24 {
     }
   }
 
+  // Direct playback belongs to Vista Stream. Iframe references stay in Harvester.
+  ArrayList<Source> vistaCandidates(Catalog item,boolean confirmedOnly){
+    ArrayList<Source> list=new ArrayList<>();
+    for(Source s:item.sources){
+      if(!HarvesterVistaBridge.isShareable(s.url,s.format))continue;
+      if(confirmedOnly&&!"PLAYED".equals(getSharedPreferences(PLAY_PREFS,0)
+        .getString("source_"+s.url.hashCode(),"")))continue;
+      list.add(s);
+    }
+    return list;
+  }
+  void openInVista(Catalog item){
+    ArrayList<Source> direct=vistaCandidates(item,true);
+    if(direct.isEmpty()){
+      new AlertDialog.Builder(this).setTitle("Teste necessário")
+        .setMessage("Antes de enviar para o Vista Stream, confirma a reprodução direta da fonte. Iframes e URLs de sessão não são exportados como vídeos independentes.")
+        .setPositiveButton("Testar reprodução",(d,w)->testCatalog(item))
+        .setNegativeButton("Cancelar",null).show();
+      return;
+    }
+    if(direct.size()==1){
+      Source s=direct.get(0);
+      HarvesterVistaBridge.open(this,s.url,item.title,s.format,s.page);return;
+    }
+    String[] labels=new String[direct.size()];
+    for(int i=0;i<direct.size();i++){
+      Source s=direct.get(i);
+      labels[i]=s.format+" • "+(Uri.parse(s.url).getHost()==null?"fonte":Uri.parse(s.url).getHost());
+    }
+    new AlertDialog.Builder(this).setTitle("Fonte para abrir no Vista Stream")
+      .setItems(labels,(d,which)->{
+        Source s=direct.get(which);
+        HarvesterVistaBridge.open(this,s.url,item.title,s.format,s.page);
+      }).setNegativeButton("Cancelar",null).show();
+  }
+
   @Override void renderVideos(){
     if(videosCards==null)return;
     videosCards.removeAllViews();
@@ -89,6 +125,12 @@ public class MainActivityV25 extends MainActivityV24 {
       addSourcesInfo(card,entry);
       card.addView(gap(9));
       btnFull(card,"▶  Testar reprodução",true,()->testCatalog(entry));
+      if(!vistaCandidates(entry,false).isEmpty()){
+        card.addView(gap(7));
+        btnFull(card,"Abrir no Vista Stream",false,()->openInVista(entry));
+      }
+      String brHint=BrTitleParser.parse(entry.title).displayHint();
+      if(!brHint.isEmpty())card.addView(tv(brHint+" • metadados estimados pelo título",11,FAINT));
       card.addView(gap(7));
       if(!approved(entry))btnFull(card,"✓  Aprovar para Biblioteca",false,()->approve(entry));
       else btnFull(card,"Abrir Biblioteca",false,()->navigate(3));
@@ -109,6 +151,12 @@ public class MainActivityV25 extends MainActivityV24 {
       addSourcesInfo(card,entry);
       card.addView(gap(9));
       btnFull(card,"▶  Testar reprodução",true,()->testCatalog(entry));
+      if(!vistaCandidates(entry,false).isEmpty()){
+        card.addView(gap(7));
+        btnFull(card,"Abrir no Vista Stream",false,()->openInVista(entry));
+      }
+      String brHint=BrTitleParser.parse(entry.title).displayHint();
+      if(!brHint.isEmpty())card.addView(tv(brHint+" • metadados estimados pelo título",11,FAINT));
       card.addView(gap(7));
       btnFull(card,"Remover da Biblioteca",false,()->{
         library.remove(entry);
