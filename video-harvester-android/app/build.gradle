@@ -2,6 +2,7 @@ plugins {
     id 'com.android.application'
 }
 
+
 android {
     namespace 'com.yure.videoharvester'
     compileSdk 35
@@ -10,8 +11,8 @@ android {
         applicationId 'com.yure.videoharvester'
         minSdk 26
         targetSdk 35
-        versionCode 21
-        versionName '2.9.1'
+        versionCode 22
+        versionName '3.0.0'
     }
 
     buildTypes {
@@ -19,4 +20,9 @@ android {
             minifyEnabled false
         }
     }
+}
+
+
+dependencies {
+    implementation 'org.jsoup:jsoup:1.18.3'
 }
