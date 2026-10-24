@@ -170,6 +170,76 @@ helpers='''    private boolean scanHostPaused(Tab tab){
     }
 '''
 s=s.replace(anchor,helpers+anchor,1)
+# Conservative crawler defaults. No domain crawl is initiated automatically.
+s=s.replace('numberField(page.body,"20")','numberField(page.body,"2")',1)
+s=s.replace('numberField(page.body,"250")','numberField(page.body,"30")',1)
+s=s.replace('numberField(page.body,"5")','numberField(page.body,"3")',1)
+s=s.replace('numberField(page.body,"1000")','numberField(page.body,"3000")',1)
+s=s.replace('parseNumber(pages,250),parseNumber(subs,20),parseNumber(depth,5),parseNumber(interval,1000)',
+            'parseNumber(pages,30),parseNumber(subs,2),parseNumber(depth,3),parseNumber(interval,3000)',1)
+s=s.replace('certs.setChecked(true)','certs.setChecked(false)',1)
+s=s.replace('scripts.setChecked(true)','scripts.setChecked(false)',1)
+s=s.replace('Páginas e subdomínios têm limites independentes.',
+            'Páginas e subdomínios têm limites independentes. Pedido mínimo a cada 2,5 segundos; respostas 429/503/522/524 interrompem o rastreio.',1)
+source.write_text(s)
+
+# CrawlEngine now paces ALL of its outgoing requests, including robots.txt,
+# sitemaps and assets, not just visits to the next HTML document.
+crawler=root/"app/src/main/java/com/harvester/browser/core/CrawlEngine.java"
+c=crawler.read_text()
+def crawl_once(before,after,label):
+    global c
+    n=c.count(before)
+    if n!=1:raise RuntimeError(f"{label}: expected 1 match, found {n}")
+    c=c.replace(before,after,1)
+crawl_once('this.delayMs = Math.max(300,delayMs);',
+           'this.delayMs = Math.max(2500,delayMs);',"crawler minimum delay")
+crawl_once('if(assetCount++>=12 || stopped.get()) break;',
+           'if(assetCount++>=4 || stopped.get()) break;',"script cap")
+crawl_once('    private String rootHost, startHost;',
+'''    private String rootHost, startHost;
+    private long lastOutgoingRequestAt=0L;
+    private String abortReason="";
+    private void paceNextRequest()throws IOException {
+        if(stopped.get())throw new IOException("Rastreio interrompido");
+        long now=System.currentTimeMillis();
+        long remain=lastOutgoingRequestAt+config.delayMs-now;
+        if(lastOutgoingRequestAt>0 && remain>0){
+            try{Thread.sleep(remain);}
+            catch(InterruptedException e){
+                stopped.set(true);Thread.currentThread().interrupt();
+                throw new IOException("Rastreio interrompido",e);
+            }
+        }
+        if(stopped.get())throw new IOException("Rastreio interrompido");
+        lastOutgoingRequestAt=System.currentTimeMillis();
+    }''',
+"unified crawler pacing")
+crawl_once('    private static Response get(String url) throws IOException {',
+'''    private Response get(String url) throws IOException {''',
+"per-run crawler GET method")
+crawl_once('''        URL source=new URL(url);
+        if(!source.getProtocol().equalsIgnoreCase("https")) throw new IOException("HTTPS required");''',
+'''        if(stopped.get())throw new IOException("Rastreio interrompido");
+        URL source=new URL(url);
+        if(!source.getProtocol().equalsIgnoreCase("https")) throw new IOException("HTTPS required");
+        paceNextRequest();''',
+"pace each outgoing GET")
+crawl_once('''            if(code<200 || code>=300) throw new IOException("HTTP "+code);''',
+'''            if(code==429 || code==503 || code==522 || code==524){
+                abortReason="Servidor limitou ou falhou (HTTP "+code+"); rastreio interrompido sem retentativas.";
+                stopped.set(true);
+                throw new IOException(abortReason);
+            }
+            if(code<200 || code>=300) throw new IOException("HTTP "+code);''',
+"stop crawler on errors")
+crawl_once('''        listener.done(pages,seenMedia.size(),stopped.get(),error);''',
+'''        listener.done(pages,seenMedia.size(),stopped.get(),
+            abortReason.isEmpty()?error:abortReason);''',
+"report reason")
+crawler.write_text(c)
+
+# Keep core tests and page-pin unchanged.
 source.write_text(s)
 
 # Update the version without changing the bundled VistaCast integration.
