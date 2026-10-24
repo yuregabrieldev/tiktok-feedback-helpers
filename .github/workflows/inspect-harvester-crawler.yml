@@ -19,7 +19,10 @@ jobs:
           from pathlib import Path
           for p in Path('hb').rglob('*.java'):
               t=p.read_text(errors='replace')
-              if p.name!='MainActivity.java':continue
+              if p.name!='CrawlEngine.java':continue
+              print('CORE CRAWLER:',p)
+              print(t[:90000])
+              continue
               lines=t.splitlines()
               wanted=[i for i,line in enumerate(lines) if
                       any(term in line for term in ('crawl(', 'crawl=', 'Crawler', 'crawlLimit',
