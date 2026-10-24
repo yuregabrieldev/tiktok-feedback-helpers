@@ -33,7 +33,8 @@ public final class HarvesterVistaBridge {
     if(f.equals("HLS")||l.matches(".*[.]m3u8([?#].*)?$"))return "application/vnd.apple.mpegurl";
     if(f.equals("DASH")||l.matches(".*[.]mpd([?#].*)?$"))return "application/dash+xml";
     if(f.equals("WEBM")||l.matches(".*[.]webm([?#].*)?$"))return "video/webm";
-    return "video/mp4";
+    if(f.equals("MP4")||l.matches(".*[.](mp4|m4v|mov)([?#].*)?$"))return "video/mp4";
+    return null; // Let Media3 probe an otherwise unknown HTML5 format.
   }
 
   public static void open(Activity host,String address,String title,String format,String sourcePage) {
