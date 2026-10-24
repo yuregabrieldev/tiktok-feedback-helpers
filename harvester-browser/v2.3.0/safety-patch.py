@@ -69,10 +69,9 @@ once('''        if(!autoScanEnabled || tab==null || tab.web==null || !tab.url.st
 '''        if(!autoScanEnabled || tab==null || tab.web==null ||
             !tab.url.startsWith("https://") || scanHostPaused(tab))return;''',
 "do not inject active scanner on cooling host")
-once('''    private void startAutoAnalysis(Tab tab){
-        if(tab==null || tab.web==null || !autoScanEnabled)return;''',
+once('''    private void startAutoAnalysis(Tab tab){''',
 '''    private void startAutoAnalysis(Tab tab){
-        if(tab==null || tab.web==null || !autoScanEnabled || scanHostPaused(tab))return;''',
+        if(scanHostPaused(tab))return;''',
 "no automatic analysis during host backoff")
 once('''        long[] delays={1700,5900};''',
 '''        // Once after load, never three repetitive scans of the same frame.
