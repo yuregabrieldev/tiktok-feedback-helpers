@@ -19,7 +19,16 @@ jobs:
           from pathlib import Path
           for p in Path('hb').rglob('*.java'):
               t=p.read_text(errors='replace')
-              if 'class DomainCrawler' in t or 'class Crawler' in t or 'class SiteCrawler' in t:
-                  print('########',p,'########')
-                  print(t[:60000])
+              if p.name!='MainActivity.java':continue
+              lines=t.splitlines()
+              wanted=[i for i,line in enumerate(lines) if
+                      any(term in line for term in ('crawl(', 'crawl=', 'Crawler', 'crawlLimit',
+                      'crawlPage', 'crawlQueue', 'crawlTask', 'URLConnection', 'OkHttp',
+                      'openConnection(', 'Thread.sleep', 'fetchUrl(', 'crawlUrl(',
+                      'startCrawl(', 'crawlWorker(', 'requestCount'))]
+              print("KEYLINES",wanted)
+              for i in wanted:
+                  print('--------',i+1,'--------')
+                  for k in range(max(0,i-3),min(len(lines),i+12)):
+                      print(f'{k+1}: {lines[k]}')
           PY
