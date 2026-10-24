@@ -32,18 +32,18 @@ one('''        TextView save=panelLabel("Guardar todas as "+found.size()+" fonte
 '''        TextView label=panelLabel("Toque em + para escolher, editar e guardar uma fonte",15,true,0xFFB4D7EC);
         label.setPadding(d(12),d(19),d(12),d(19));
         page.body.addView(label);''',"remove unsafe bulk save")
-one('''            panelLine(page.body,"▶",item.format.toUpperCase(Locale.ROOT)+" • "+item.title,
-                shortDomain(item.url)+" · "+item.discoveredFrom,()->mediaDetails(item,false),null);
-            panelDivider(page.body);''',
-'''            LinearLayout resultRow=panelLine(page.body,"▶",
-                item.format.toUpperCase(Locale.ROOT)+" • "+item.title,
-                shortDomain(item.url)+" · "+item.discoveredFrom,
-                ()->openNativePlayer(item),null);
-            TextView plus=panelIcon("+",28,"Adicionar vídeo à biblioteca e ao Vista Stream");
+# Add an inline + to each detected row without assuming previous renderer edits.
+start=s.index("    private void showDetected(){")
+first=s.index("        for(MediaItem item:found){",start)
+finish=s.index("            panelDivider(page.body);",first)
+s=s[:finish]+'''            LinearLayout resultRow=(LinearLayout)page.body.getChildAt(page.body.getChildCount()-1);
+            resultRow.setOnClickListener(v->openNativePlayer(item));
+            resultRow.setOnLongClickListener(v->{mediaDetails(item,false);return true;});
+            TextView plus=panelIcon("+",28,"Adicionar às duas bibliotecas");
             resultRow.addView(plus,new LinearLayout.LayoutParams(d(49),d(51)));
             plus.setOnClickListener(v->sendToVistaStream(item,true));
-            resultRow.setOnLongClickListener(v->{mediaDetails(item,false);return true;});
-            panelDivider(page.body);''',"inline + add button")
+'''+s[finish:]
+
 # Present explicit dual-save action in the media details.
 one('''            boolean added=store.add(item);toast(added?"Guardado":"Já está guardado");},null);''',
 '''            sendToVistaStream(item,true);},null);''',"details imports only by explicit confirm")
