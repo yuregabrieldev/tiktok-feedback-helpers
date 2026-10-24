@@ -112,6 +112,14 @@ public class MainActivityV25 extends MainActivityV24 {
       }).setNegativeButton("Cancelar",null).show();
   }
 
+  @Override void createSettingsPage(){
+    super.createSettingsPage();
+    LinearLayout panel=sectionCard(settingsBody,"Fontes BR — filmes, séries e animes",
+      "Pesquisa em provedores opcionais; usa os mesmos adaptadores de catálogo do VS. Reprodução por links diretos autorizados.");
+    btnFull(panel,"Abrir catálogo brasileiro",true,()->
+      startActivity(new Intent(this,BrCatalogActivity.class)));
+  }
+
   @Override void renderVideos(){
     if(videosCards==null)return;
     videosCards.removeAllViews();
