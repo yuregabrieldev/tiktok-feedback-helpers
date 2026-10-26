@@ -26,7 +26,9 @@ for name in expected:
 for name,needle,sub in [
     ("MainActivityV17","static final int WINE=","static int WINE="),
     ("MainActivityV21","static final int DARK=","static int DARK="),
-    ("MainActivityV22","static final int SUCCESS_GREEN=","static int SUCCESS_GREEN=")
+    ("MainActivityV22","static final int SUCCESS_GREEN=","static int SUCCESS_GREEN="),
+    ("MainActivityV22","static final int GREEN_LIGHT=","static int GREEN_LIGHT="),
+    ("MainActivityV22","static final int RED_WARNING=","static int RED_WARNING=")
 ]:
     p=scraper/(name+".java")
     data=p.read_text()
