@@ -624,8 +624,8 @@ jobs:
                        'PlaybackTestActivity','VistaScraperActivity'):
               assert (base/(name+'.java')).exists(),name
           assert 'org.jsoup:jsoup:1.18.3' in gradle
-          assert "versionCode 34" in gradle
-          for name in ('VistaScraperActivity','PlayerInspectorActivityV28',
+          assert "versionCode 35" in gradle
+          for name in ('VistaScraperPremiumActivity','PlayerInspectorActivityV28',
                        'BrCatalogActivity','PlaybackTestActivity','ScanNotificationService'):
               assert 'com.yure.videoharvester.'+name in manifest,name
           for label in ('Scan completo de websites','Análise de iframes',
