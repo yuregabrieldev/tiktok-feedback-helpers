@@ -1,4 +1,4 @@
-name: VistaBrowser v3.6 — Inspect Integration and Gestures
+name: VistaBrowser v3.6 — VistaStream Integration and UI Reliability
 on:
   push:
     branches: [vistabrowser-v36-vistastream-usability-fix]
@@ -285,27 +285,90 @@ jobs:
           assert 'private void showAppearance(' in s
           print('PASS VistaBrowser progress, technical toggles-only menu, protected bottom bar and feature entry points')
           PY
-      - name: Audit integration UI and gesture handlers
+      - name: Apply VistaBrowser v3.6 integration and gesture fixes
+        run: |
+          python3 harvester-browser/v3.6.0/upgrade.py
+          grep -q "versionName '3.6.0'" hb-v18/app/build.gradle
+      - name: Verify VistaStream contract and functional UI bindings
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          s=Path('hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java').read_text().splitlines()
-          for anchor,limit in [
-              ("private boolean sendToVistaStream(",105),
-              ("private void showSearchOverlay(",105),
-              ("private void hideKeyboard()",38),
-              ("public boolean dispatchTouchEvent(",39),
-              ("private void showMenu(){",115),
-              ("private void profileStatus(",42),
-              ("private void showAutoScanStatus(",70),
-              ("private void showQuickActions(){",95),
-              ("private void closePage(){",20),
-          ]:
-              i=next((i for i,l in enumerate(s) if anchor in l),-1)
-              print("=== ANCHOR",anchor,"LINE",i+1)
-              if i>=0:
-                  for j in range(i,min(len(s),i+limit)):
-                      print(f"L{j+1:04d}|"+s[j])
-          print("=== MANIFEST ===")
-          print(Path('hb-v18/app/src/main/AndroidManifest.xml').read_text()[:5500])
+          s=Path('hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java').read_text()
+          manifest=Path('hb-v18/app/src/main/AndroidManifest.xml').read_text()
+          assert 'com.ivor.openstream.harvester.HarvesterPlaybackActivity' in s
+          assert 'com.ivor.openstream.harvester.HarvesterImportActivity' in s
+          assert 'VistaBrowserPlaybackActivity' not in s
+          assert 'VistaBrowserImportActivity' not in s
+          assert 'new String[]{"com.vistastream.tv","com.vistastream.tv.debug"}' in s
+          assert 'getActivityInfo(' in s
+          assert 'private void showVistaStreamConnection(){' in s
+          assert 'private void openVistaStreamHome(){' in s
+          assert 'availableVistaStreamPackage(false)!=null?' in s
+          assert 'com.vistastream.tv.action.PLAY' in s
+          assert 'com.vistastream.tv.action.IMPORT' in s
+          assert 'this::togglePopupProtection' in s
+          assert 'this::toggleAutoScanner' in s
+          assert 'this::showVistaStreamConnection' in s
+          assert 'getCurrentFocus()' in s and 'focus instanceof EditText' in s
+          assert 'getScrollY()==0' in s and 'popup.dismiss();' in s
+          assert 'grab.setOnTouchListener(' in s
+          assert 'android:name="com.vistastream.tv"' in manifest
+          assert 'android:name="com.vistastream.tv.debug"' in manifest
+          for method in ('showDetected(){','showLibrary(){','showInspector(){',
+              'showCrawler(){','openNativePlayer(','showQuickActions(){',
+              'showMenu(){','showSearchOverlay(','showAppearance(){',
+              'showAutoScanStatus(){','renderOperaTabs(){'):
+              assert method in s, method
+          print('PASS VistaStream exported contract, capability check, responsive status actions, keyboard and swipe')
           PY
+      - name: Install Android SDK
+        run: |
+          echo "ANDROID_HOME=${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}" >> "$GITHUB_ENV"
+          SDKMANAGER=$(find /usr/local/lib/android/sdk -type f -name sdkmanager -print -quit)
+          test -n "$SDKMANAGER"
+          echo "SDKMANAGER=$SDKMANAGER" >> "$GITHUB_ENV"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" 'platforms;android-36' 'build-tools;36.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.6.0'
+      - name: Test extraction engine and Cast eligibility
+        working-directory: hb-v18
+        run: |
+          mkdir -p /tmp/hb18-tests
+          javac -d /tmp/hb18-tests app/src/main/java/com/harvester/browser/core/*.java core-tests/CoreTests.java
+          java -cp /tmp/hb18-tests CoreTests
+      - name: Compile Android APK
+        working-directory: hb-v18
+        run: gradle :app:assembleDebug --stacktrace --no-daemon
+      - name: Stage APK
+        run: |
+          test -s hb-v18/app/build/outputs/apk/debug/app-debug.apk
+          cp hb-v18/app/build/outputs/apk/debug/app-debug.apk VistaBrowser-v3.6.0.apk
+          sha256sum VistaBrowser-v3.6.0.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VistaBrowser-v3.6.0
+          path: VistaBrowser-v3.6.0.apk
+          if-no-files-found: error
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: vistabrowser-v3.6.0
+          target_commitish: ${{ github.sha }}
+          name: VistaBrowser v3.6.0 — VistaStream Connection & Gesture Fixes
+          body: |
+            VistaBrowser 3.6.0 — VistaStream bridge and interaction fixes.
+            Corrects Android exported activity names for VistaStream PLAY and IMPORT,
+            which were accidentally renamed during browser rebranding, and prioritizes
+            the installed production VistaStream before a debug version.
+            Adds real exported-receiver detection and a connection/open companion dialog.
+            The Protection and Scanner cards toggle their own functions directly,
+            and the VistaStream card checks installation status instead of showing
+            an unrelated autoplay-enabled boolean. All scanner toggles remain in
+            the three-dot sheet.
+            Hides Android keyboard on taps outside any active input, including fullscreen
+            search. Swipe down from the main menu handle or content top to dismiss.
+            Existing video detection, library, WebView, crawler, player, Google Cast,
+            source metadata, updates and appearance features remain intact.
+            APK debug signature note: existing installations may have a differing signer.
+          files: VistaBrowser-v3.6.0.apk
