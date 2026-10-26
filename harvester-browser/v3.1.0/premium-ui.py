@@ -189,6 +189,24 @@ one('''        popup.setBackgroundDrawable(Styles.bg(this,0xF925282D,22));''',
 one('''        menuEntry(box,"ⓘ","Acerca do VistaBrowser",()->new AlertDialog.Builder(this).setTitle("VistaBrowser 1.5")''',
 '''        menuEntry(box,"ⓘ","Acerca do VistaBrowser",()->new AlertDialog.Builder(this).setTitle("VistaBrowser")''',"stale about version")
 
+# Share the current webpage using native Android share without touching scanning.
+one('''        menuEntry(box,"⟳","Atualizar página",()->{
+            if(selected!=null && selected.web!=null)selected.web.reload();
+        },popup);''',
+'''        menuEntry(box,"⟳","Atualizar página",()->{
+            if(selected!=null && selected.web!=null)selected.web.reload();
+        },popup);
+        menuEntry(box,"⇧","Partilhar página",()->{
+            if(selected==null || HOME.equals(selected.url)){
+                toast("Abra um site para partilhar.");
+                return;
+            }
+            Intent share=new Intent(Intent.ACTION_SEND);
+            share.setType("text/plain");
+            share.putExtra(Intent.EXTRA_TEXT,selected.url);
+            startActivity(Intent.createChooser(share,"Partilhar página"));
+        },popup);''',"share current page")
+
 # Fullscreen panels stay functional; all list data, searches, and callbacks untouched.
 one('''    private static final int PANEL_BG=0xFF101213, PANEL_CARD=0xFF272B30;
     private static final int PANEL_TEXT=0xFFF3F5F7, PANEL_MUTED=0xFFA9B2C0;''',
@@ -291,8 +309,11 @@ inject='''    public static GradientDrawable gradient(Context c,int top,int bott
     public static void glyph(TextView v,String source,int color,int size){
         PremiumGlyph icon=PremiumGlyph.forSymbol(source,color,dp(v.getContext(),size));
         if(icon==null)return;
-        v.setText("");
-        v.setCompoundDrawables(null,icon,null,null);
+        android.text.SpannableString span=new android.text.SpannableString(" ");
+        span.setSpan(new android.text.style.ImageSpan(icon,
+            android.text.style.DynamicDrawableSpan.ALIGN_BOTTOM),0,1,
+            android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        v.setText(span);
         v.setGravity(Gravity.CENTER);
     }
 '''
