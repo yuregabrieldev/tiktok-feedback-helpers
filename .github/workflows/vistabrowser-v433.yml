@@ -611,7 +611,7 @@ jobs:
           assert 'HarvesterPlaybackActivity' in premium
           assert 'toolbar21.setLayoutParams(new LinearLayout.LayoutParams(-1,dp(84)))' in premium
           assert 'titleGroup.addView(screenTitle,new LinearLayout.LayoutParams(-1,dp(39)))' in premium
-          assert 'versionCode 37' in Path('hb-v18/app/build.gradle').read_text()
+          assert 'versionCode 38' in Path('hb-v18/app/build.gradle').read_text()
           print('PASS fixed header sizing, transient VistaStream playback, explicit import receipts')
           PY
       - name: Verify media workflow and preservation of scraper engine
