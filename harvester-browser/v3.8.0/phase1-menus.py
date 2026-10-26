@@ -5,6 +5,10 @@ s=p.read_text(encoding="utf-8")
 def swap(a,b,name):
     global s
     n=s.count(a)
+    if name=="seamless Android system chrome":
+        if n<1:raise RuntimeError(f"{name}: expected at least one match")
+        s=s.replace(a,b)
+        return
     if n!=1:raise RuntimeError(f"{name}: expected 1, found {n}")
     s=s.replace(a,b,1)
 def replace_region(start,end,text,name):
