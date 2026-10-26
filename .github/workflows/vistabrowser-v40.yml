@@ -1,4 +1,4 @@
-name: VistaBrowser v4.0 — Theme Inspection
+name: VistaBrowser v4.0 — Full Light & Dark Themes
 on:
   push:
     branches: [vistabrowser-v40-full-theme-engine]
@@ -437,65 +437,106 @@ jobs:
           assert 'private void showQuickActions(){' not in s
           print('PASS advanced settings: seven unique tools, no duplicate main-menu rows')
           PY
-      - name: Apply unified theme palette and inspect remaining UI
+      - name: Upgrade all native surfaces to dynamic themes
         run: |
           python3 harvester-browser/v4.0.0/phase1-theme-core.py
-          python3 - <<'PY'
-          from pathlib import Path
-          src=Path('hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java').read_text().splitlines()
-          for i,l in enumerate(src):
-              if any(key in l for key in ('private void homeChip(','private void appearanceChanged(', 'private void setupUi(', 'onCreate(', 'private void showHomepage(')):
-                  print('===',i+1,l)
-                  for j in range(i,min(i+57,len(src))):print(f'@@{j+1}: {src[j]}')
-          print('=== HOME DETAILS AFTER SPEED DIALS ===')
-          for i in range(705,803):print(f'@@{i+1}: {src[i]}')
-          print('=== SETUP UI AND NAV BAR ===')
-          for i in range(145,245):print(f'@@{i+1}: {src[i]}')
-          print('=== REMAINING DIRECT COLOR CALLS ===')
-          for i,l in enumerate(src):
-              if ('setTextColor(0x' in l or 'setBackgroundColor(0x' in l or 'setColor(0x' in l):print(f'@@{i+1}: {l}')
-          PY
-      - name: Inspect theme dependencies after v3.9
+          python3 harvester-browser/v4.0.0/phase2-light-surfaces.py
+          sed -i "s/versionName '3.9.0'/versionName '4.0.0'/; s/versionCode 30/versionCode 31/" hb-v18/app/build.gradle
+          grep -q "versionName '4.0.0'" hb-v18/app/build.gradle
+      - name: Theme coverage and feature regression checks
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          main=Path('hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java').read_text().splitlines()
-          styles=Path('hb-v18/app/src/main/java/com/harvester/browser/ui/Styles.java').read_text().splitlines()
-          print('=== STYLES ===')
-          for i,l in enumerate(styles):print(f'{i+1}: {l}')
-          print('=== THEME COLORS COUNT ===')
-          from collections import Counter
-          import re
-          for name,lines in (('Main',main),('Styles',styles)):
-              count=Counter(re.findall(r'0x[0-9A-Fa-f]{8}', '\n'.join(lines)))
-              print(name, count.most_common(50))
-          print('=== TARGET BLOCKS ===')
-          for key,limit in [
-            ('private void applyBrowserTheme()',95),
-            ('private void showMenu()',165),
-            ('private void showPageActions()',58),
-            ('private void renderOperaTabs()',120),
-            ('private void renderTabCards(',100),
-            ('private void showAppearance()',112),
-            ('private void showHomeAppearance()',70),
-            ('private void showHomepage()',100),
-            ('private void configureBottomNavigation()',100),
-            ('private BrowserPage newPage(',64),
-            ('private void panelLine(',36),
-            ('private void profileTile(',48),
-            ('private void profileWide(',50),
-            ('private void vbToggleCard(',52),
-            ('private void showSearchOverlay(',70),
-            ('private void showAdvancedBrowserSettings()',55),
-            ('private void onCreate(',40),
-          ]:
-              loc=next((i for i,l in enumerate(main) if key in l),None)
-              print('===',key,'line',loc)
-              if loc is None:continue
-              for j in range(loc,min(len(main),loc+limit)):print(f'@{j+1}: {main[j]}')
-          print('=== THEMATIC HELPERS ===')
-          for i,l in enumerate(main):
-              if 'Styles.' in l and ('BG' in l or 'SURFACE' in l or 'TEXT' in l or 'MUTED' in l or 'ACCENT' in l):
-                  if any(q in l for q in ('static final','private static','int PANEL','int DARK')):
-                      print(f'@{i+1}: {l}')
+          base=Path('hb-v18/app/src/main/java/com/harvester/browser')
+          s=(base/'MainActivity.java').read_text()
+          styles=(base/'ui/Styles.java').read_text()
+          assert 'public static void setTheme(boolean light)' in styles
+          assert 'public static int surface(int color)' in styles
+          assert 'public static int ink(int color)' in styles
+          assert 'public static int border(int color)' in styles
+          assert 'public static int accentInk()' in styles
+          assert 'v.setTextColor(ink(color))' in styles
+          assert 'new int[]{surface(top),surface(bottom)}' in styles
+          assert 'd.setColor(surface(color))' in styles
+          assert 'private void initializeThemePalette()' in s
+          assert 'initializeThemePalette();setupUi();' in s
+          assert 'private boolean browserLightMode()' in s
+          assert 'PANEL_BG=Styles.BG' in s
+          assert 'PANEL_TEXT=Styles.TEXT' in s
+          assert 'browserControls.setBackground(' in s
+          assert 'addressContainer.setBackground(' in s
+          assert 'if(lightHome)' in s
+          assert 'wallpaperStage.addView(translucentIvory' in s
+          assert 'Styles.LIGHT?0xFFECEADE' in s
+          assert 'lightHome?0xF8F8F6EF' in s
+          assert 'browserHost.removeAllViews()' in s
+          assert 'private void showAdvancedBrowserSettings()' in s
+          assert 'private void showMenu()' in s
+          assert 'private void showPageActions()' in s
+          assert 'private void showHomeAppearance()' in s
+          assert 'private void showAppearance()' in s
+          assert 'private void renderOperaTabs()' in s
+          assert 'private void showSearchOverlay(' in s
+          assert 'private boolean sendToVistaStream(' in s
+          assert 'com.ivor.openstream.harvester.HarvesterPlaybackActivity' in s
+          assert 'com.ivor.openstream.harvester.HarvesterImportActivity' in s
+          for feature in ('showDetected(){','showLibrary(){','showInspector(){',
+                 'showCrawler(){','openNativePlayer(','showAutoScanStatus(){',
+                 'showCrashDiagnostics(){','showExportOptions(){','showCrawlExports(){'):
+              assert feature in s,feature
+          assert "versionCode 31" in Path('hb-v18/app/build.gradle').read_text()
+          print('PASS dynamic light/dark palette, main UI surfaces, browser features and integration')
           PY
+      - name: Install Android SDK
+        run: |
+          echo "ANDROID_HOME=${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}" >> "$GITHUB_ENV"
+          SDKMANAGER=$(find /usr/local/lib/android/sdk -type f -name sdkmanager -print -quit)
+          test -n "$SDKMANAGER"
+          echo "SDKMANAGER=$SDKMANAGER" >> "$GITHUB_ENV"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" 'platforms;android-36' 'build-tools;36.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.6.0'
+      - name: Test extraction engine and Cast eligibility
+        working-directory: hb-v18
+        run: |
+          mkdir -p /tmp/hb18-tests
+          javac -d /tmp/hb18-tests app/src/main/java/com/harvester/browser/core/*.java core-tests/CoreTests.java
+          java -cp /tmp/hb18-tests CoreTests
+      - name: Compile Android APK
+        working-directory: hb-v18
+        run: gradle :app:assembleDebug --stacktrace --no-daemon
+      - name: Stage APK
+        run: |
+          test -s hb-v18/app/build/outputs/apk/debug/app-debug.apk
+          cp hb-v18/app/build/outputs/apk/debug/app-debug.apk VistaBrowser-v4.0.0.apk
+          sha256sum VistaBrowser-v4.0.0.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VistaBrowser-v4.0.0
+          path: VistaBrowser-v4.0.0.apk
+          if-no-files-found: error
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: vistabrowser-v4.0.0
+          target_commitish: ${{ github.sha }}
+          name: VistaBrowser v4.0.0 — Complete Light / Dark Theme
+          body: |
+            VistaBrowser v4.0.0 — complete native light/dark theme system.
+            Fixes the issue where switching to Claro only affected small top
+            and bottom areas, while menus, cards, tabs and settings stayed dark.
+            Introduces shared runtime palette for dark and ivory light themes,
+            contrast-aware labels, icons, selected borders and toggles.
+            Appearance and Página inicial settings, internal diagnostics,
+            library, search, browser chrome and Opera-inspired tab overview
+            now use the selected native theme.
+            On the floral homepage, light mode softly washes the wallpaper
+            with ivory, uses dark readable controls and translucent light cards.
+            Android status and navigation icon contrast follows theme.
+            Respects Seguir sistema, Claro and Escuro. Web content is not
+            forcibly altered: site CSS remains independent.
+            All scanner, crawler, Cast, player and VistaStream Intent
+            integration functions are preserved.
+            Debug APK signing must match previous versions for direct update.
+          files: VistaBrowser-v4.0.0.apk
