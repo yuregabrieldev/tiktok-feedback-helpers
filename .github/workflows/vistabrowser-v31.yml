@@ -1,0 +1,169 @@
+name: VistaBrowser v3.1 - Visual inspection
+on:
+  push:
+    branches: [vistabrowser-v31-premium-ui]
+    paths:
+      - harvester-browser/v3.1.0/**
+      - .github/workflows/vistabrowser-v31.yml
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Restore verified Harvester Browser v1.4 base
+        run: |
+          mkdir -p hb-v18
+          cat harvester-browser/v1.4.0/payload*.txt | base64 --decode > /tmp/hb-v14.txz
+          echo "2676ef48fb053bf276281e08745f29e7c184658cd2edfa0bb2a084c7379af2a2  /tmp/hb-v14.txz" | sha256sum -c -
+          tar -xJf /tmp/hb-v14.txz -C hb-v18
+      - name: Apply verified Cast integration v1.5
+        run: |
+          echo "97e43ab4f90eb24f24afb373677f070b78c4cfe741ad79bdf50e0b1f232fb235  harvester-browser/v1.5.0/cast-patch.xz.b64" | sha256sum -c -
+          base64 -d harvester-browser/v1.5.0/cast-patch.xz.b64 | xz -d >/tmp/cast-v15.py
+          (cd hb-v18 && python3 /tmp/cast-v15.py)
+      - name: Apply v1.6 and v1.7 improvements
+        run: |
+          (cd hb-v18 && python3 ../harvester-browser/v1.6.0/fix-cast.py)
+          (cd hb-v18 && python3 ../harvester-browser/v1.7.0/now-playing-cast.py)
+      - name: Integrate local video playback and cast
+        run: |
+          (cd hb-v18 && python3 ../harvester-browser/v1.8.0/install-player.py)
+          grep -q "versionName '1.8.0'" hb-v18/app/build.gradle
+          grep -q 'class NativePlayerActivity' hb-v18/app/src/main/java/com/harvester/browser/NativePlayerActivity.java
+      - name: Install safe player and receiver-state Cast diagnostics
+        run: |
+          (cd hb-v18 && python3 ../harvester-browser/v1.9.0/upgrade.py)
+          grep -q "versionName '1.9.0'" hb-v18/app/build.gradle
+          grep -q 'Reprodutor e Google Cast' hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java
+          grep -q 'class NativePlayerActivity' hb-v18/app/src/main/java/com/harvester/browser/NativePlayerActivity.java
+      - name: Restore actual VistaCast source
+        run: |
+          mkdir -p vista
+          base64 -d harvester-browser/v2.0.0/vistacast-base.tar.xz.b64 | xz -d | tar -xf - -C vista
+          test -f vista/app/src/main/java/com/vistacast/app/PlaybackService.java
+          test -f vista/app/src/main/java/com/vistacast/app/MainActivity.java
+      - name: Replace Harvester player with VistaCast CastPlayer implementation
+        run: |
+          python3 harvester-browser/v2.0.0/integrate-vistacast.py
+          grep -q "versionName '2.0.0'" hb-v18/app/build.gradle
+          grep -q 'MediaRouteButtonFactory' hb-v18/app/src/main/java/com/harvester/browser/NativePlayerActivity.java
+          grep -q 'CastPlayer.Builder' hb-v18/app/src/main/java/com/harvester/browser/PlaybackService.java
+      - name: Apply browser and VistaCast reliability upgrades
+        run: |
+          python3 harvester-browser/v2.1.0/upgrade-browser.py
+          python3 harvester-browser/v2.1.0/upgrade-player.py
+          grep -q "versionName '2.1.0'" hb-v18/app/build.gradle
+          grep -q 'auto_open_player_on_play' hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java
+          grep -q 'showQualitySelection' hb-v18/app/src/main/java/com/harvester/browser/NativePlayerActivity.java
+          grep -q 'Reproduzir no telemóvel' hb-v18/app/src/main/java/com/harvester/browser/NativePlayerActivity.java
+      - name: Apply per-tab navigation lock
+        run: |
+          python3 harvester-browser/v2.2.0/apply-page-lock.py
+          grep -q "versionName '2.2.0'" hb-v18/app/build.gradle
+          grep -q 'Bloquear saída da página atual' hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java
+          test -s hb-v18/app/src/main/assets/pagelock.js
+      - name: Verify page pin URL decisions
+        working-directory: hb-v18
+        run: |
+          mkdir -p /tmp/hb22-tests
+          javac -d /tmp/hb22-tests app/src/main/java/com/harvester/browser/core/PageNavigationLock.java core-tests/PageNavigationLockTests.java
+          java -cp /tmp/hb22-tests PageNavigationLockTests
+      - name: Eliminate reload loop and add bounded scan traffic protection
+        run: |
+          python3 harvester-browser/v2.3.0/safety-patch.py
+          grep -q "versionName '2.3.0'" hb-v18/app/build.gradle
+          grep -q 'HOST_PAUSE_MS' hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java
+          grep -q 'Recursos observados pelo WebView' hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java').read_text()
+          block=s.split('if(pageLockBlocks(tab,link)){',1)[1].split('tab.url=link;',1)[0]
+          assert 'w.loadUrl(target)' not in block, 'Detected obsolete navigation retry'
+          assert 'w.stopLoading()' in block
+          print('Navigation lock does not refetch blocked URL')
+          PY
+      - name: Enable official Vista Stream external player and metadata import
+        run: |
+          python3 harvester-browser/v2.4.0/bridge-vista.py
+          grep -q "versionName '2.4.0'" hb-v18/app/build.gradle
+          grep -q 'com.vistastream.tv.action.PLAY' hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java
+          grep -q 'com.vistastream.tv.action.IMPORT' hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java
+          grep -q 'Adicionar ao Vista Stream' hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java
+      - name: Apply explicit + import and save-on-confirmation
+        run: |
+          python3 harvester-browser/v2.5.0/curated-save.py
+          grep -q "versionName '2.5.0'" hb-v18/app/build.gradle
+          grep -q 'VISTA_IMPORT_REQUEST' hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java
+          grep -q 'Guardar vídeos: apenas pelo botão' hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java
+      - name: Forward page metadata to Vista Stream matcher
+        run: |
+          python3 harvester-browser/v2.6.0/improve-metadata-intent.py
+          grep -q "versionName '2.6.0'" hb-v18/app/build.gradle
+          grep -q 'yearFinder' hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java
+      - name: Add passive PT-BR subtitle/dubbing and episode hints
+        run: |
+          python3 harvester-browser/v2.7.0/forward-ptbr-metadata.py
+          grep -q "versionName '2.7.0'" hb-v18/app/build.gradle
+          grep -q 'com.vistastream.tv.extra.AUDIO_LANGUAGE' hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java
+      - name: Test PT-BR media labels with Java
+        working-directory: hb-v18
+        run: |
+          mkdir -p /tmp/hb-ptbr-tests
+          javac -d /tmp/hb-ptbr-tests \
+            app/src/main/java/com/harvester/browser/core/BrazilianMediaHints.java \
+            core-tests/BrazilianMediaHintsTests.java
+          java -cp /tmp/hb-ptbr-tests BrazilianMediaHintsTests
+      - name: Enhance Brazilian episode recognition and import safety
+        run: |
+          python3 harvester-browser/v2.8.0/upgrade.py
+          grep -q "versionName '2.8.0'" hb-v18/app/build.gradle
+          grep -q "BR_EPISODE" hb-v18/app/src/main/java/com/harvester/browser/core/BrazilianMediaHints.java
+      - name: Test Brazilian episode labels, v2.8
+        working-directory: hb-v18
+        run: |
+          mkdir -p /tmp/hb28-tests
+          javac -d /tmp/hb28-tests app/src/main/java/com/harvester/browser/core/BrazilianMediaHints.java core-tests/BrazilianMediaHintsTests.java ../harvester-browser/v2.8.0/BrazilianMediaHintsV28Tests.java
+          java -cp /tmp/hb28-tests BrazilianMediaHintsTests
+          java -cp /tmp/hb28-tests BrazilianMediaHintsV28Tests
+      - name: Fix explicit web bookmark import
+        run: |
+          python3 harvester-browser/v2.9.0/upgrade.py
+          grep -q "versionName '2.9.0'" hb-v18/app/build.gradle
+          grep -q 'Vista Stream.*import editor' hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java
+      - name: Rename and upgrade to VistaBrowser v3.0
+        run: |
+          python3 harvester-browser/v3.0.0/upgrade.py
+          cp harvester-browser/v3.0.0/VistaBrowserUpdates.java hb-v18/app/src/main/java/com/harvester/browser/VistaBrowserUpdates.java
+          grep -q "versionName '3.0.0'" hb-v18/app/build.gradle
+          grep -q 'android:label="VistaBrowser"' hb-v18/app/src/main/AndroidManifest.xml
+          grep -q 'private void showQuickActions' hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java
+          grep -q 'VistaBrowserUpdates.check(this,false)' hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java
+          ! grep -q 'navButton(nav,"⟳"' hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java
+      - name: Audit current UI and style source
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('hb-v18/app/src/main/java/com/harvester/browser')
+          for f in sorted(p.glob('*.java')):
+              if f.name=='MainActivity.java':
+                  lines=f.read_text().splitlines()
+                  ranges=[(0,499),(780,1120),(1120,1340),(1340,1500)]
+                  for a,b in ranges:
+                      print('=== FILE MAIN',a,b,'===')
+                      for i in range(a,min(b,len(lines))):print(f'{i+1:04d}: {lines[i]}')
+              elif f.name=='Styles.java':
+                  print('=== FILE STYLES ===')
+                  for i,line in enumerate(f.read_text().splitlines()):print(f'{i+1:04d}: {line}')
+          for file in Path('hb-v18/app/src/main/res').rglob('*.xml'):
+              if file.name in ('styles.xml','colors.xml','themes.xml'):
+                  print('=== FILE RES',file,'===')
+                  print(file.read_text()[:4000])
+          PY
