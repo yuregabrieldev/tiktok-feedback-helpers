@@ -1,4 +1,4 @@
-name: VistaBrowser v3.0 — Inspect browser UI
+name: VistaBrowser v3.0 — In-app Updates and Quick Actions
 on:
   push:
     branches: [vistabrowser-v3-updater-quickactions]
@@ -157,6 +157,15 @@ jobs:
           for x in (Path('hb-v18/app/src/main/res/values/strings.xml'),Path('hb-v18/app/build.gradle')):
               if x.exists():print(x, x.read_text()[:5000])
           PY
+      - name: Rename and upgrade to VistaBrowser v3.0
+        run: |
+          python3 harvester-browser/v3.0.0/upgrade.py
+          cp harvester-browser/v3.0.0/VistaBrowserUpdates.java hb-v18/app/src/main/java/com/harvester/browser/VistaBrowserUpdates.java
+          grep -q "versionName '3.0.0'" hb-v18/app/build.gradle
+          grep -q 'android:label="VistaBrowser"' hb-v18/app/src/main/AndroidManifest.xml
+          grep -q 'private void showQuickActions' hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java
+          grep -q 'VistaBrowserUpdates.check(this,false)' hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java
+          ! grep -q 'navButton(nav,"⟳"' hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java
       - name: Install Android SDK
         run: |
           echo "ANDROID_HOME=${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}" >> "$GITHUB_ENV"
@@ -177,5 +186,27 @@ jobs:
       - name: Compile Android APK
         working-directory: hb-v18
         run: gradle :app:assembleDebug --stacktrace --no-daemon
-      - name: Inspect-only build output
-        run: test -s hb-v18/app/build/outputs/apk/debug/app-debug.apk
+      - name: Stage APK
+        run: |
+          test -s hb-v18/app/build/outputs/apk/debug/app-debug.apk
+          cp hb-v18/app/build/outputs/apk/debug/app-debug.apk VistaBrowser-v3.0.0.apk
+          sha256sum VistaBrowser-v3.0.0.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VistaBrowser-v3.0.0
+          path: VistaBrowser-v3.0.0.apk
+          if-no-files-found: error
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: vistabrowser-v3.0.0
+          target_commitish: ${{ github.sha }}
+          name: VistaBrowser v3.0.0 — Quick Actions & App Updates
+          body: |
+            Harvester Browser renamed to VistaBrowser, preserving the existing Android application ID and data.
+            Bottom reload now opens a floating quick-action panel with refresh,
+            per-tab navigation lock, scanner, popup blocker, and player settings.
+            Automatically checks for VistaBrowser releases and offers manual APK installation.
+            The user must confirm both download and installation. No silent background APK installs.
+            NOTE: Signing keys must match for in-place Android updates. This debug build
+            may require clean installation if the preceding APK used a different debug key.
+          files: VistaBrowser-v3.0.0.apk
