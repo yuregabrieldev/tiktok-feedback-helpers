@@ -152,10 +152,10 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           p=Path('hb-v18/app/src/main/java/com/harvester/browser')
-          for f in sorted(p.glob('*.java')):
+          for f in sorted(list(p.glob('*.java')) + list((p/'ui').glob('*.java'))):
               if f.name=='MainActivity.java':
                   lines=f.read_text().splitlines()
-                  ranges=[(0,499),(780,1120),(1120,1340),(1340,1500)]
+                  ranges=[(468,492),(870,1110),(1140,1250)]
                   for a,b in ranges:
                       print('=== FILE MAIN',a,b,'===')
                       for i in range(a,min(b,len(lines))):print(f'{i+1:04d}: {lines[i]}')
