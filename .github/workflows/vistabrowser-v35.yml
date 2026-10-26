@@ -249,6 +249,8 @@ jobs:
           PY
       - name: Apply VistaBrowser 3.5 loading and technical controls
         run: |
+          python3 harvester-browser/v3.4.0/upgrade.py
+          grep -q "versionName '3.4.0'" hb-v18/app/build.gradle
           python3 harvester-browser/v3.5.0/upgrade.py
           grep -q "versionName '3.5.0'" hb-v18/app/build.gradle
       - name: Verify spinner and preserved settings
