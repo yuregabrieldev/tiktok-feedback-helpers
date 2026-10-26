@@ -1,4 +1,4 @@
-name: VistaBrowser v3.4 — Audit Menus and Layout
+name: VistaBrowser v3.4 — Menu & Layout Restoration
 on:
   push:
     branches: [vistabrowser-v34-menu-layout-fix]
@@ -247,18 +247,88 @@ jobs:
           assert 'if(tab.privateMode!=privateOverviewMode)continue;' in s
           print('PASS: navigation, fullscreen search, wallpaper options and core features')
           PY
-      - name: Inspect VistaBrowser UI boundaries
+      - name: Apply VistaBrowser v3.4 controls and layout restoration
+        run: |
+          python3 harvester-browser/v3.4.0/upgrade.py
+          grep -q "versionName '3.4.0'" hb-v18/app/build.gradle
+      - name: Verify restored feature access and consistent safe areas
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          p=Path('hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java')
-          lines=p.read_text().splitlines()
-          for key in ['private void setupUi()', 'private void configureBottomNavigation()', 'private void showQuickActions()', 'private void showMenu()', 'private void newPage(', 'private void renderOperaTabs()', 'private void showSearchOverlay(', 'private void showHomepage()', 'private void hideKeyboard()']:
-              matches=[i for i,line in enumerate(lines) if key in line]
-              print('=====',key,'at',[i+1 for i in matches])
-              if not matches:continue
-              start=matches[0]
-              maxlen=230 if ('QuickActions' in key or 'showMenu' in key or 'setupUi' in key) else (130 if 'newPage' in key else 100)
-              for i in range(start,min(start+maxlen,len(lines))):
-                  print(f'@{i+1:04d}|{lines[i]}')
+          s=Path('hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java').read_text()
+          a=s.split('private void showQuickActions(){',1)[1].split('private void showAdvancedToolsMenu(){',1)[0]
+          b=s.split('private void showAdvancedToolsMenu(){',1)[1].split('private void showMenu(){',1)[0]
+          profile=s.split('private void showMenu(){',1)[1].split('private void profileStatus(',1)[0]
+          assert 'menu.setOnClickListener(v->{hideKeyboard();showQuickActions();});' in s
+          assert 'navButton(bottomNav,"♙",()->{' in s
+          assert 'hideKeyboard();showMenu();' in s
+          assert 'Todas as ferramentas' in a
+          for toggle in ('Bloquear saída da página atual',
+            'Abrir VistaStream ao iniciar um vídeo',
+            'Analisar páginas automaticamente',
+            'Interações em domínios autorizados','Bloquear pop-ups',
+            'Autorizar interações neste domínio'):
+              assert toggle in a, toggle
+          for feature in ('showDetected','showLibrary','showInspector','showCrawler',
+                          'openPlayerCastHub','showDownloads','showAddresses','showTabOverview'):
+              assert feature in profile, feature
+          assert 'Voltar' not in profile and 'Avançar' not in profile and 'Página inicial' not in profile
+          assert 'popup.showAtLocation(appFrame,Gravity.BOTTOM|Gravity.CENTER_HORIZONTAL,0,0);' in profile
+          assert 'safeStatusTop=topInset;' in s
+          assert 'applyOverlaySafeArea(page);' in s
+          assert 'private void showSearchOverlay(' in s
+          assert 'private boolean sendToVistaStream(' in s
+          assert 'private void startAutoAnalysis(' in s
+          assert 'VistaBrowserUpdates.check(this,false)' in s
+          assert 'menuEntry(box,"⟳","Atualizar página"' in b
+          print("PASS profile dashboard, upper scanner settings, bottom alignment, overlays, all functional anchors")
           PY
+      - name: Install Android SDK
+        run: |
+          echo "ANDROID_HOME=${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}" >> "$GITHUB_ENV"
+          SDKMANAGER=$(find /usr/local/lib/android/sdk -type f -name sdkmanager -print -quit)
+          test -n "$SDKMANAGER"
+          echo "SDKMANAGER=$SDKMANAGER" >> "$GITHUB_ENV"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" 'platforms;android-36' 'build-tools;36.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.6.0'
+      - name: Test extraction engine and Cast eligibility
+        working-directory: hb-v18
+        run: |
+          mkdir -p /tmp/hb18-tests
+          javac -d /tmp/hb18-tests app/src/main/java/com/harvester/browser/core/*.java core-tests/CoreTests.java
+          java -cp /tmp/hb18-tests CoreTests
+      - name: Compile Android APK
+        working-directory: hb-v18
+        run: gradle :app:assembleDebug --stacktrace --no-daemon
+      - name: Stage APK
+        run: |
+          test -s hb-v18/app/build/outputs/apk/debug/app-debug.apk
+          cp hb-v18/app/build/outputs/apk/debug/app-debug.apk VistaBrowser-v3.4.0.apk
+          sha256sum VistaBrowser-v3.4.0.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VistaBrowser-v3.4.0
+          path: VistaBrowser-v3.4.0.apk
+          if-no-files-found: error
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: vistabrowser-v3.4.0
+          target_commitish: ${{ github.sha }}
+          name: VistaBrowser v3.4.0 — Premium Menus and Safe Areas
+          body: |
+            VistaBrowser v3.4.0 — unified premium menus and system safe areas.
+            The browser upper three-dots provides advanced browser/scan controls,
+            including all scanner, pop-up, player and per-domain toggles.
+            The bottom user icon opens an Opera-inspired profile dashboard with
+            Favorites, Transfers, History, Library, Tabs, Private, Videos, Inspector,
+            Crawler, Cast, Appearance, Updates and Advanced Tools.
+            Redundant Back, Forward, Home entries were removed from the profile.
+            Profile sheet now sits flush with the screen bottom; internal overlay
+            screens account for status bar and navigation safe insets.
+            All existing browser features, media detection, playback, Cast,
+            crawler and VistaStream integration retained from v3.3.
+            Note: In-place Android update requires the same signing certificate.
+          files: VistaBrowser-v3.4.0.apk
