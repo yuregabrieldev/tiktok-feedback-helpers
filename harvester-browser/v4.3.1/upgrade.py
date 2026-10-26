@@ -1,7 +1,7 @@
 from pathlib import Path
 premium=Path("hb-v18/app/src/main/java/com/yure/videoharvester/VistaScraperPremiumActivity.java")
 assert premium.exists()
-premium.write_text(Path("harvester-browser/v4.3.0/VistaScraperPremiumActivity.java").read_text())
+premium.write_text(Path("harvester-browser/v4.3.0/VistaScraperPremiumActivity.java").read_text().replace('getSharedPreferences(PLAY_PREFS,0)','getSharedPreferences("vh25_playback_tests",0)'))
 # V4.3 build workflow copies the premium class during its upgrade. We update
 # that class with a patch to avoid changing compiled engine internals.
 # Changes are already authored into v4.3.0/VistaScraperPremiumActivity.java on
