@@ -1,4 +1,4 @@
-name: VistaBrowser v3.8 — UI Source Inspection
+name: VistaBrowser v3.8 — Opera Menus, Appearance and Tabs
 on:
   push:
     branches: [vistabrowser-v38-opera-full-ui]
@@ -363,32 +363,104 @@ jobs:
               assert core in s,core
           print('PASS Home UI state, swipe-dismiss and deduplicated capabilities')
           PY
-      - name: Audit controls, appearance, tabs and layout
+      - name: Build VistaBrowser v3.8 — contextual menus, appearance, tabs
+        run: |
+          python3 harvester-browser/v3.8.0/phase1-menus.py
+          python3 harvester-browser/v3.8.0/phase2-appearance.py
+          python3 harvester-browser/v3.8.0/phase3-tabs.py
+          python3 harvester-browser/v3.8.0/phase4-verify.py
+          grep -q "versionName '3.8.0'" hb-v18/app/build.gradle
+      - name: Validate v3.8 real functional UI and retained media integration
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          p=Path('hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java')
-          lines=p.read_text().splitlines()
-          terms=['private void showMenu(){','private void showQuickActions(){',
-              'private void renderOperaTabs(){','private void renderTabCards(',
-              'private void showAppearance(){','private void selectPalette(',
-              'private void showHomepage(){','private void showSearchOverlay(',
-              'private BrowserPage newPage(','private void addPanelAction(',
-              'private void profileStatus(','private void profileWide(',
-              'private void configureBottomNavigation(){','private void synchronizeUi(){',
-              'private void showTabOverview(){','private void showAddresses(',
-              'private void closePage(){','private void toggleDesktop(){',
-              'private void capturePreview(','private void closeTab(', 'private void goHome(){']
-          for term in terms:
-              match=next((i for i,line in enumerate(lines) if term in line),None)
-              print('=== TARGET',term,'LINE',match)
-              if match is None:continue
-              maxlen=220 if term in ('private void showMenu(){','private void showQuickActions(){','private void renderTabCards(', 'private void showAppearance(){') else 170 if term in ('private void renderOperaTabs(){','private void showHomepage(){') else 88
-              for i in range(match,min(len(lines),match+maxlen)):
-                  print(f'@{i+1}: {lines[i]}')
-          print('=== STYLES ===')
-          print(Path('hb-v18/app/src/main/java/com/harvester/browser/ui/Styles.java').read_text()[:7000])
-          print('=== MANIFEST THEME ===')
-          for path in Path('hb-v18/app/src/main/res/values').glob('*.xml'):
-              print(path, path.read_text()[:4000])
+          s=Path('hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java').read_text()
+          p=s.split('private void showPageActions(){',1)[1].split('private void menuDivider(',1)[0]
+          profile=s.split('private void showMenu(){',1)[1].split('private void shareCurrentPage(){',1)[0]
+          assert 'menu.setOnClickListener(v->{hideKeyboard();showPageActions();});' in s
+          assert 'settings.setOnClickListener(v->showHomeAppearance());' in s
+          for label in ('Atualizar','Partilhar','Adicionar aos favoritos',
+                'Adicionar acesso rápido','Nível de zoom','Modo desktop / móvel',
+                'Localizar na página','Traduzir página','Guardar como PDF',
+                'Obter instantâneo','Ecrã inteiro'):
+              assert label in p,label
+          assert 'private void showQuickActions(){' not in s
+          assert 'private void vbToggleCard(' in s
+          for action in ('Bloquear saída','Auto scanner','Pop-ups','VistaStream auto',
+                'Interações','Este domínio'):
+              assert action in profile,action
+          assert 'private void showHomeAppearance(){' in s
+          assert 'private void showAppearance(){' in s
+          assert 'themeCard(' in s and 'wallpaperOption(' in s
+          assert 'home_customization' in s and 'home_logo' in s
+          assert 'home_speed_dials' in s and 'theme_mode' in s
+          assert 'private void showTabActionMenu(){' in s
+          assert 'private void confirmCloseAllTabs(){' in s
+          assert 'private void confirmCloseSelectedTabs(){' in s
+          assert 'private void renderOperaTabs(){' in s
+          assert 'R.drawable.vb_flower' in s
+          assert 'private boolean sendToVistaStream(' in s
+          assert 'com.ivor.openstream.harvester.HarvesterPlaybackActivity' in s
+          assert 'com.ivor.openstream.harvester.HarvesterImportActivity' in s
+          for method in ('showDetected(){','showLibrary(){','showInspector(){',
+               'showCrawler(){','openNativePlayer(','showMenu(){',
+               'showTabOverview(){','showSearchOverlay(','showAutoScanStatus(){',
+               'showCrashDiagnostics(){','showExportOptions(){','showCrawlExports(){'):
+              assert method in s,method
+          print("PASS v3.8: no lost browser/video functions, all controls accessible")
           PY
+      - name: Install Android SDK
+        run: |
+          echo "ANDROID_HOME=${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}" >> "$GITHUB_ENV"
+          SDKMANAGER=$(find /usr/local/lib/android/sdk -type f -name sdkmanager -print -quit)
+          test -n "$SDKMANAGER"
+          echo "SDKMANAGER=$SDKMANAGER" >> "$GITHUB_ENV"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" 'platforms;android-36' 'build-tools;36.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.6.0'
+      - name: Test extraction engine and Cast eligibility
+        working-directory: hb-v18
+        run: |
+          mkdir -p /tmp/hb18-tests
+          javac -d /tmp/hb18-tests app/src/main/java/com/harvester/browser/core/*.java core-tests/CoreTests.java
+          java -cp /tmp/hb18-tests CoreTests
+      - name: Compile Android APK
+        working-directory: hb-v18
+        run: gradle :app:assembleDebug --stacktrace --no-daemon
+      - name: Stage APK
+        run: |
+          test -s hb-v18/app/build/outputs/apk/debug/app-debug.apk
+          cp hb-v18/app/build/outputs/apk/debug/app-debug.apk VistaBrowser-v3.8.0.apk
+          sha256sum VistaBrowser-v3.8.0.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VistaBrowser-v3.8.0
+          path: VistaBrowser-v3.8.0.apk
+          if-no-files-found: error
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: vistabrowser-v3.8.0
+          target_commitish: ${{ github.sha }}
+          name: VistaBrowser v3.8.0 — Opera-inspired Interface
+          body: |
+            VistaBrowser v3.8.0 — full Opera-inspired interface refresh.
+            Browser page actions in upper three dots: refresh, share, bookmarks,
+            speed dial, zoom, desktop mode, find in page, translate via external
+            service with confirmation, Android Print to PDF, screenshot, fullscreen.
+            Original six navigation/automation controls moved to compact 3-column
+            glow-bordered status/action buttons after Explore & Playback in the
+            user profile menu. No duplicated technical settings modal.
+            Home top 3 dots open the dedicated Página inicial customization panel.
+            Appearance screen now has theme selectors, color swatches, wallpaper
+            options and saved Home display preferences.
+            Redesigned tabs with proper normal/private views, tab preview,
+            fixed bottom actions, list/grid preference, selection mode,
+            close selected/close all confirmations and tab-specific context menu.
+            Android status/navigation bar colors integrate with app surfaces.
+            Existing WebView browser, media scanning, crawler, downloads,
+            bookmarks, external player, Chromecast and VistaStream bridge retained.
+            No simulated AI assistant or device synchronization controls added.
+            Development signature: in-place update requires matching APK certificate.
+          files: VistaBrowser-v3.8.0.apk
