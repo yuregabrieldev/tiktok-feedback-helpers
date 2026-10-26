@@ -99,6 +99,9 @@ public final class VistaScraperPremiumActivity extends VistaScraperActivity {
         if(toolbar21==null)return;
         toolbar21.removeAllViews();
         toolbar21.setGravity(Gravity.CENTER_VERTICAL);
+        // A weighted LayoutParams from the inherited screenTitle was making
+        // the vertical toolbar expand to several hundred pixels.
+        toolbar21.setLayoutParams(new LinearLayout.LayoutParams(-1,dp(84)));
         toolbar21.setPadding(dp(16),dp(15),dp(16),dp(14));
         toolbar21.setBackgroundColor(Styles.BG);
 
@@ -110,6 +113,7 @@ public final class VistaScraperPremiumActivity extends VistaScraperActivity {
 
         LinearLayout titleGroup=new LinearLayout(this);
         titleGroup.setOrientation(LinearLayout.VERTICAL);
+        titleGroup.setGravity(Gravity.CENTER_VERTICAL);
         titleGroup.setPadding(dp(5),0,0,0);
         shellHint=t("VISTABROWSER  •  SCANNER",10,true,accent());
         titleGroup.addView(shellHint);
@@ -118,7 +122,7 @@ public final class VistaScraperPremiumActivity extends VistaScraperActivity {
                 ((android.view.ViewGroup)screenTitle.getParent()).removeView(screenTitle);
             screenTitle.setTextColor(Styles.TEXT);
             screenTitle.setTextSize(23);
-            titleGroup.addView(screenTitle);
+            titleGroup.addView(screenTitle,new LinearLayout.LayoutParams(-1,dp(39)));
         }
         toolbar21.addView(titleGroup,new LinearLayout.LayoutParams(0,-2,1));
         TextView menu=t("⋮",29,true,Styles.TEXT);
@@ -395,7 +399,9 @@ public final class VistaScraperPremiumActivity extends VistaScraperActivity {
             "Uma referência iframe não é um ficheiro. A aprovação na biblioteca acontece apenas após confirmação.");
         place(steps,t("01   Testar a reprodução no dispositivo",13,true,Styles.TEXT),-2,2);
         btnFull(steps,"▶  Testar fonte",false,()->testCatalog(item));
-        place(steps,t("02   Rever título e metadados no VistaStream",13,true,Styles.TEXT),-2,17);
+        place(steps,t("02   Reproduzir no VistaStream e Chromecast",13,true,Styles.TEXT),-2,17);
+        btnFull(steps,"▶  Reproduzir no VistaStream / TV",false,()->playSourceInVista(item));
+        place(steps,t("03   Rever título e metadados no VistaStream",13,true,Styles.TEXT),-2,17);
         btnFull(steps,"✓  Rever e importar no VistaStream",true,()->{
             Source chosen=confirmedSource(item);
             if(chosen==null){
@@ -407,7 +413,7 @@ public final class VistaScraperPremiumActivity extends VistaScraperActivity {
             }
             startVistaImport(item,chosen);
         });
-        place(steps,t("03   Guardar no dispositivo (opcional)",13,true,Styles.TEXT),-2,17);
+        place(steps,t("04   Guardar no dispositivo (opcional)",13,true,Styles.TEXT),-2,17);
         if(downloadable!=null){
             btnFull(steps,"↓  Guardar vídeo na Galeria",false,()->confirmGallery(item,downloadable));
             place(steps,t("Disponível apenas para ficheiros MP4/M4V/WebM HTTP diretos. O ficheiro será guardado em Filmes/VistaBrowser.",11,false,Styles.MUTED),-2,5);
@@ -423,6 +429,48 @@ public final class VistaScraperPremiumActivity extends VistaScraperActivity {
             }
         });
         dlg.show();
+    }
+    private void playSourceInVista(Catalog item){
+        Source source=null;
+        for(Source candidate:item.sources){
+            if(candidate.url==null)continue;
+            Uri uri=Uri.parse(candidate.url);
+            String scheme=uri.getScheme()==null?"":uri.getScheme();
+            String fmt=candidate.format==null?"":candidate.format.toUpperCase(java.util.Locale.ROOT);
+            if(!("https".equalsIgnoreCase(scheme)||"http".equalsIgnoreCase(scheme))
+                ||uri.getHost()==null||fmt.equals("REFERENCIA_IFRAME")||fmt.equals("IFRAME"))
+                continue;
+            if(source==null)source=candidate;
+            if(confirmedSource(item)==candidate){source=candidate;break;}
+        }
+        if(source==null){
+            new AlertDialog.Builder(this).setTitle("Apenas referências de player")
+                .setMessage("O scanner ainda não detetou uma fonte de vídeo direta. Abra o player original ou teste uma fonte no inspetor.")
+                .setPositiveButton("Testar",(d,w)->testCatalog(item))
+                .setNegativeButton("Cancelar",null).show();
+            return;
+        }
+        // Playback is transient, independent of approved library ingestion.
+        // Signed links may expire; we do not store their tokens persistently.
+        BrTitleParser.Parsed title=BrTitleParser.parse(item.title);
+        for(String pkg:new String[]{"com.vistastream.tv.debug","com.vistastream.tv"}){
+            Intent intent=new Intent("com.vistastream.tv.action.PLAY");
+            intent.setClassName(pkg,
+                "com.ivor.openstream.harvester.HarvesterPlaybackActivity");
+            intent.putExtra("com.vistastream.tv.extra.URL",source.url);
+            intent.putExtra("com.vistastream.tv.extra.TITLE",title.title);
+            intent.putExtra("com.vistastream.tv.extra.MIME_TYPE",mediaMime(source));
+            if(source.page!=null && (source.page.startsWith("https://")||
+                    source.page.startsWith("http://"))){
+                String clean=Uri.parse(source.page).buildUpon()
+                    .clearQuery().fragment(null).build().toString();
+                intent.putExtra("com.vistastream.tv.extra.REFERER",clean);
+                intent.putExtra("com.vistastream.tv.extra.PAGE_URL",clean);
+            }
+            try{startActivity(intent);return;}
+            catch(android.content.ActivityNotFoundException|SecurityException ignored){}
+        }
+        toast("Instale o VistaStream atualizado para reproduzir e transmitir à TV");
     }
     private void startVistaImport(Catalog item,Source source){
         if(pendingImport!=null){toast("Conclua primeiro a importação anterior");return;}
@@ -452,6 +500,22 @@ public final class VistaScraperPremiumActivity extends VistaScraperActivity {
             try{
                 pendingImport=item;
                 pendingImportUrl=source.url;
+                final String expected=source.url;
+                android.os.ResultReceiver confirmation=new android.os.ResultReceiver(
+                    new android.os.Handler(android.os.Looper.getMainLooper())){
+                    @Override protected void onReceiveResult(int result,android.os.Bundle data){
+                        if(result!=RESULT_OK||data==null||pendingImport==null)return;
+                        if(!expected.equals(data.getString("com.vistastream.tv.extra.URL","")))return;
+                        Intent receipt=new Intent()
+                            .putExtra("com.vistastream.tv.extra.URL",expected)
+                            .putExtra("com.vistastream.tv.extra.TITLE",
+                                data.getString("com.vistastream.tv.extra.TITLE",""))
+                            .putExtra("com.vistastream.tv.extra.SAVED_WEB_ONLY",
+                                data.getBoolean("com.vistastream.tv.extra.SAVED_WEB_ONLY",false));
+                        handlePremiumImportResult(RESULT_OK,receipt);
+                    }
+                };
+                intent.putExtra("com.vistastream.tv.extra.CONFIRMATION_RECEIVER",confirmation);
                 startActivityForResult(intent,IMPORT_REQUEST);
                 return;
             }catch(android.content.ActivityNotFoundException|SecurityException ignored){
@@ -472,15 +536,22 @@ public final class VistaScraperPremiumActivity extends VistaScraperActivity {
     }
     @Override protected void onActivityResult(int request,int result,Intent data){
         super.onActivityResult(request,result,data);
-        if(request!=IMPORT_REQUEST)return;
-        Catalog item=pendingImport;String expected=pendingImportUrl;
+        if(request==IMPORT_REQUEST)handlePremiumImportResult(result,data);
+    }
+    private void handlePremiumImportResult(int result,Intent data){
+        Catalog item=pendingImport;
+        String expected=pendingImportUrl;
+        if(item==null)return; // Matching receipt processed; ignore duplicate Android result.
         pendingImport=null;pendingImportUrl=null;
-        if(item==null||expected==null||result!=RESULT_OK||data==null){
-            toast("Importação cancelada: nenhuma nova fonte foi aprovada");return;
+        if(expected==null||result!=RESULT_OK||data==null){
+            toast("Importação cancelada: nada foi guardado no scanner");return;
         }
         String response=data.getStringExtra("com.vistastream.tv.extra.URL");
         if(!expected.equals(response)){
-            toast("VistaStream não confirmou esta mesma fonte; o scanner não guardou o título");
+            toast("O VistaStream não confirmou esta fonte; nada foi adicionado ao scanner");return;
+        }
+        if(data.getBooleanExtra("com.vistastream.tv.extra.SAVED_WEB_ONLY",false)){
+            toast("Página guardada no VistaStream como referência Web. A fonte de vídeo não foi aprovada.");
             return;
         }
         String confirmedTitle=data.getStringExtra("com.vistastream.tv.extra.TITLE");
@@ -489,7 +560,7 @@ public final class VistaScraperPremiumActivity extends VistaScraperActivity {
         approve(item);
         saveScan();
         renderVideos();renderLibrary();refresh();
-        toast("Metadados confirmados e guardados no VistaStream e no scanner");
+        toast("Fonte e metadados confirmados no VistaStream e no scanner");
     }
     private void confirmGallery(Catalog item,Source source){
         new AlertDialog.Builder(this).setTitle("Guardar vídeo na Galeria?")
