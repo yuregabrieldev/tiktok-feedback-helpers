@@ -56,7 +56,7 @@ public final class PremiumGlyph extends Drawable {
             case "⚠":k="alert";break;
             case "ⓘ":k="info";break;
             case "⌫":k="delete";break;
-            case "◈":k="diamond";break;
+
             default:return null;
         }
         return new PremiumGlyph(k,color,size);
