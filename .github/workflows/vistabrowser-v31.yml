@@ -1,4 +1,4 @@
-name: VistaBrowser v3.1 - Visual inspection
+name: VistaBrowser v3.1 — Premium UI & Functionality Regression
 on:
   push:
     branches: [vistabrowser-v31-premium-ui]
@@ -147,23 +147,80 @@ jobs:
           grep -q 'private void showQuickActions' hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java
           grep -q 'VistaBrowserUpdates.check(this,false)' hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java
           ! grep -q 'navButton(nav,"⟳"' hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java
-      - name: Audit current UI and style source
+      - name: Apply premium VistaBrowser design without modifying core services
+        run: |
+          cp harvester-browser/v3.1.0/PremiumGlyph.java hb-v18/app/src/main/java/com/harvester/browser/ui/PremiumGlyph.java
+          python3 harvester-browser/v3.1.0/premium-ui.py
+          grep -q "versionName '3.1.0'" hb-v18/app/build.gradle
+          grep -q "versionCode 22" hb-v18/app/build.gradle
+          grep -q 'private void showQuickActions()' hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java
+          grep -q 'com.vistastream.tv.action.IMPORT' hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java
+          grep -q 'VistaBrowserUpdates.check(this,false)' hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java
+          grep -q 'PremiumGlyph.forSymbol' hb-v18/app/src/main/java/com/harvester/browser/ui/Styles.java
+          test -f hb-v18/app/src/main/java/com/harvester/browser/PlaybackService.java
+          test -f hb-v18/app/src/main/java/com/harvester/browser/NativePlayerActivity.java
+      - name: Assert all existing feature modules are preserved
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          p=Path('hb-v18/app/src/main/java/com/harvester/browser')
-          for f in sorted(list(p.glob('*.java')) + list((p/'ui').glob('*.java'))):
-              if f.name=='MainActivity.java':
-                  lines=f.read_text().splitlines()
-                  ranges=[(468,492),(870,1110),(1140,1250)]
-                  for a,b in ranges:
-                      print('=== FILE MAIN',a,b,'===')
-                      for i in range(a,min(b,len(lines))):print(f'{i+1:04d}: {lines[i]}')
-              elif f.name=='Styles.java':
-                  print('=== FILE STYLES ===')
-                  for i,line in enumerate(f.read_text().splitlines()):print(f'{i+1:04d}: {line}')
-          for file in Path('hb-v18/app/src/main/res').rglob('*.xml'):
-              if file.name in ('styles.xml','colors.xml','themes.xml'):
-                  print('=== FILE RES',file,'===')
-                  print(file.read_text()[:4000])
+          main=Path('hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java').read_text()
+          requirements=[
+              'showTabOverview()', 'showDetected()', 'showInspector()', 'showLibrary()',
+              'showCrawler()', 'showDownloads()', 'showAddresses(', 'showCrawlExports()',
+              'showExportOptions()', 'sendToVistaStream(', 'onNativePlaybackRequested(',
+              'capturePage(', 'startAutoAnalysis(', 'pinnedTabUrls', 'approvedPlayerHosts',
+              'castCurrentPlayback(', 'newTab(', 'selectTab(', 'toggleDesktop(',
+              'VistaBrowserUpdates.check(this,false)', 'getSharedPreferences("harvester-settings"'
+          ]
+          for item in requirements:
+              assert item in main,item
+          assert 'com.harvester.browser' in Path('hb-v18/app/build.gradle').read_text()
+          assert 'android:label="VistaBrowser"' in Path('hb-v18/app/src/main/AndroidManifest.xml').read_text()
+          print("All 21 core feature markers remain present.")
           PY
+      - name: Install Android SDK
+        run: |
+          echo "ANDROID_HOME=${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}" >> "$GITHUB_ENV"
+          SDKMANAGER=$(find /usr/local/lib/android/sdk -type f -name sdkmanager -print -quit)
+          test -n "$SDKMANAGER"
+          echo "SDKMANAGER=$SDKMANAGER" >> "$GITHUB_ENV"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" 'platforms;android-36' 'build-tools;36.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.6.0'
+      - name: Test extraction engine and Cast eligibility
+        working-directory: hb-v18
+        run: |
+          mkdir -p /tmp/hb18-tests
+          javac -d /tmp/hb18-tests app/src/main/java/com/harvester/browser/core/*.java core-tests/CoreTests.java
+          java -cp /tmp/hb18-tests CoreTests
+      - name: Compile Android APK
+        working-directory: hb-v18
+        run: gradle :app:assembleDebug --stacktrace --no-daemon
+      - name: Stage APK
+        run: |
+          test -s hb-v18/app/build/outputs/apk/debug/app-debug.apk
+          cp hb-v18/app/build/outputs/apk/debug/app-debug.apk VistaBrowser-v3.1.0.apk
+          sha256sum VistaBrowser-v3.1.0.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VistaBrowser-v3.1.0
+          path: VistaBrowser-v3.1.0.apk
+          if-no-files-found: error
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: vistabrowser-v3.1.0
+          target_commitish: ${{ github.sha }}
+          name: VistaBrowser v3.1.0 — Premium Interface
+          body: |
+            VistaBrowser 3.1.0: premium dark visual redesign inspired by the clarity of Candy Browser,
+            implemented with original Android components and icon drawings, not copied assets.
+            Redesigned home hero and feature tiles, compact address chrome, bottom actions,
+            floating scanner/popup settings, organized menu surfaces, all search/list pages,
+            video and inspector cards, downloads and visual tab previews.
+            Preserves all existing browsing, scanner, player, Chromecast, saved libraries,
+            download manager, data, intent integration with VistaStream and in-app updater.
+            Uses the same Android package ID; signed-debug build may require uninstall
+            when the previous install was signed with a different debug key.
+          files: VistaBrowser-v3.1.0.apk
