@@ -14,7 +14,9 @@ def once(old,new,label):
 
 # 1. Loading progress is a discreet horizontal progress bar instead of percent
 # text. Keep all original page-load callbacks and WebView progress mechanics.
-once('private TextView progressIndicator;', 'private ProgressBar progressIndicator;', "progress declaration")
+once('private TextView tabCounter, progressIndicator;',
+'''private TextView tabCounter;
+    private ProgressBar progressIndicator;''',"progress declaration")
 
 once('''        progressIndicator=Styles.text(this,"",10,false,Styles.ACCENT);
         progressIndicator.setPadding(d(14),0,d(14),0);
@@ -28,6 +30,17 @@ once('''        progressIndicator=Styles.text(this,"",10,false,Styles.ACCENT);
         progressIndicator.setVisibility(View.INVISIBLE);
         root.addView(progressIndicator,new LinearLayout.LayoutParams(-1,d(3)));''',
 "slim progress bar")
+
+once('''                    progressIndicator.setText("Não foi possível carregar esta página");''',
+'''                    progressIndicator.setVisibility(View.INVISIBLE);
+                    toast("Não foi possível carregar esta página");''',
+"page load failed status")
+
+once('''                if(selected==tab)progressIndicator.setText(value<100?"A carregar • "+value+"%":"");''',
+'''                if(selected==tab){
+                    progressIndicator.setProgress(Math.max(0,Math.min(100,value)));
+                    progressIndicator.setVisibility(value<100?View.VISIBLE:View.INVISIBLE);
+                }''',"WebChromeClient live page progress")
 
 once('''        progressIndicator.setText(selected.progress>=100?"":("A carregar • "+selected.progress+"%"));''',
 '''        progressIndicator.setProgress(Math.max(0,Math.min(100,selected.progress)));
