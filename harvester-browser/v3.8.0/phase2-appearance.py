@@ -189,22 +189,14 @@ once('''        home.addView(wordmark);
             .getBoolean("home_logo",true))home.addView(wordmark);
 
         LinearLayout searchPill=Styles.row(this);''',"home logotype visibility")
-once('''        home.addView(modes,modesParams);
-
-        TextView shortcutsTitle''',
-'''        if(getSharedPreferences("vistabrowser-appearance",MODE_PRIVATE)
-            .getBoolean("home_search_shortcuts",true))home.addView(modes,modesParams);
-
-        TextView shortcutsTitle''',"home quick search controls visibility")
+once('''home.addView(modes,modesParams);''',
+'''if(getSharedPreferences("vistabrowser-appearance",MODE_PRIVATE)
+            .getBoolean("home_search_shortcuts",true))home.addView(modes,modesParams);''',"home quick search controls visibility")
 # Speed dials group is displayed only if selected.
-once('''        home.addView(shortcutsTitle);
-
-        List<String[]> entries''',
-'''        boolean showDials=getSharedPreferences("vistabrowser-appearance",MODE_PRIVATE)
+once('''home.addView(shortcutsTitle);''',
+'''boolean showDials=getSharedPreferences("vistabrowser-appearance",MODE_PRIVATE)
             .getBoolean("home_speed_dials",true);
-        if(showDials)home.addView(shortcutsTitle);
-
-        List<String[]> entries''',"home speed dial heading")
+        if(showDials)home.addView(shortcutsTitle);''',"home speed dial heading")
 once('''            home.addView(row);
         }
 
