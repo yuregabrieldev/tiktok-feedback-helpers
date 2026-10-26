@@ -447,6 +447,10 @@ jobs:
               if any(key in l for key in ('private void homeChip(','private void appearanceChanged(', 'private void setupUi(', 'onCreate(', 'private void showHomepage(')):
                   print('===',i+1,l)
                   for j in range(i,min(i+57,len(src))):print(f'@@{j+1}: {src[j]}')
+          print('=== HOME DETAILS AFTER SPEED DIALS ===')
+          for i in range(705,803):print(f'@@{i+1}: {src[i]}')
+          print('=== SETUP UI AND NAV BAR ===')
+          for i in range(145,245):print(f'@@{i+1}: {src[i]}')
           print('=== REMAINING DIRECT COLOR CALLS ===')
           for i,l in enumerate(src):
               if ('setTextColor(0x' in l or 'setBackgroundColor(0x' in l or 'setColor(0x' in l):print(f'@@{i+1}: {l}')
