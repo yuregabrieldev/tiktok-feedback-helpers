@@ -437,6 +437,20 @@ jobs:
           assert 'private void showQuickActions(){' not in s
           print('PASS advanced settings: seven unique tools, no duplicate main-menu rows')
           PY
+      - name: Apply unified theme palette and inspect remaining UI
+        run: |
+          python3 harvester-browser/v4.0.0/phase1-theme-core.py
+          python3 - <<'PY'
+          from pathlib import Path
+          src=Path('hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java').read_text().splitlines()
+          for i,l in enumerate(src):
+              if any(key in l for key in ('private void homeChip(','private void appearanceChanged(', 'private void setupUi(', 'onCreate(', 'private void showHomepage(')):
+                  print('===',i+1,l)
+                  for j in range(i,min(i+57,len(src))):print(f'@@{j+1}: {src[j]}')
+          print('=== REMAINING DIRECT COLOR CALLS ===')
+          for i,l in enumerate(src):
+              if ('setTextColor(0x' in l or 'setBackgroundColor(0x' in l or 'setColor(0x' in l):print(f'@@{i+1}: {l}')
+          PY
       - name: Inspect theme dependencies after v3.9
         run: |
           python3 - <<'PY'
