@@ -32,24 +32,23 @@ patch_exact(main,
         }
         awaitingVistaImport=null;''',"deferred false-cancel check in original browser")
 
-# DB failures should never crash the Browser after the user returns from the
-# VistaStream editor; the successful remote save is still acknowledged.
+# The existing browser library writer has changed across releases. Wrap
+# the entire imported-result handler, preserving all of its original branches
+# and DB operations while catching any runtime errors before the Activity dies.
 patch_exact(main,
-'''        store.deleteMedia(chosen.url);
-        boolean saved=store.add(chosen);
-        toast(saved?"Guardado no Harvester e no Vista Stream":"Não foi possível guardar no Harvester");''',
-'''        try{
-            store.deleteMedia(chosen.url);
-            boolean saved=store.add(chosen);
-            if(data.getBooleanExtra("com.vistastream.tv.extra.SAVED_TEMPORARY",false))
-                toast("Fonte guardada no VistaStream e no navegador. O link temporário poderá expirar.");
-            else
-                toast(saved?"Guardado no VistaBrowser e no VistaStream":
-                    "Guardado no VistaStream; não foi possível atualizar a biblioteca do navegador.");
+'''    private void handleVistaImportResult(int resultCode,Intent data) {''',
+'''    private void handleVistaImportResult(int resultCode,Intent data) {
+        try{
+            handleVistaImportResultUnsafe(resultCode,data);
         }catch(RuntimeException e){
-            android.util.Log.e("VistaBrowserImport","Erro local após confirmação do VistaStream",e);
-            toast("Importado no VistaStream; o navegador não conseguiu atualizar a sua lista.");
-        }''',"safe local library after remote import success")
+            android.util.Log.e("VistaBrowserImport","Erro ao atualizar a biblioteca local",e);
+            awaitingVistaImport=null;
+            if(!isFinishing()&&!isDestroyed())
+                toast("O retorno do VistaStream foi recebido, mas o navegador não conseguiu atualizar a biblioteca.");
+        }
+    }
+    private void handleVistaImportResultUnsafe(int resultCode,Intent data) {''',
+    "safe browser callback, preserving existing library implementation")
 
 patch_exact(premium,
 '''        if(item==null)return; // Matching receipt processed; ignore duplicate Android result.
