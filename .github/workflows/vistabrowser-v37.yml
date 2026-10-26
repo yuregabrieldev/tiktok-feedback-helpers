@@ -1,4 +1,4 @@
-name: VistaBrowser v3.7 — Audit App Structure
+name: VistaBrowser v3.7 — Home, Unified Menus & Swipe Sheets
 on:
   push:
     branches: [vistabrowser-v37-menu-home-gestures]
@@ -321,23 +321,98 @@ jobs:
               assert method in s, method
           print('PASS VistaStream exported contract, capability check, responsive status actions, keyboard and swipe')
           PY
-      - name: Audit menu and home behavior
+      - name: Fix Home black screen and unify premium menus v3.7
+        run: |
+          python3 harvester-browser/v3.7.0/upgrade.py
+          grep -q "versionName '3.7.0'" hb-v18/app/build.gradle
+      - name: Test native Home navigation and unique feature access
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          p=Path('hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java')
-          ss=p.read_text()
-          ls=ss.splitlines()
-          markers=['private void showAdvancedToolsMenu(', 'private void showMenu(', 'private void showHomepage(', 'private void switchTab(', 'private void newTab(', 'private void closeTab(', 'private void configureBottomNavigation(', 'private void synchronizeUi(', 'private void openHome(', 'private void onPageFinished(', 'private void showQuickActions(', 'private void profileWide(', 'private void renderOperaTabs(']
-          for mark in markers:
-            found=[i for i,l in enumerate(ls) if mark in l]
-            print('===',mark,'indices',found)
-            for start in found[:1]:
-              end=min(len(ls),start+(185 if 'showAdvancedTools' in mark or 'showMenu(' in mark else 130 if 'showHomepage' in mark or 'newTab(' in mark or 'switchTab' in mark else 75))
-              for i in range(start,end):
-                print(f'@{i+1}: '+ls[i])
-          print('=== HOME USES ===')
-          for i,line in enumerate(ls):
-            if any(token in line for token in ('loadUrl(HOME)','selected.url=HOME','HOME.equals(selected.url)','onPageStarted(WebView','onPageFinished(WebView','browserHost.removeAllViews()','browserHost.addView(')):
-              print(f'@{i+1}: '+line)
+          s=Path('hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java').read_text()
+          menu=s.split('private void showMenu(){',1)[1].split('private void shareCurrentPage(){',1)[0]
+          assert 'private void showAdvancedToolsMenu(){' not in s
+          assert 'this::showAdvancedToolsMenu' not in s
+          assert 'private void goHome(){' in s
+          assert 'if(HOME.equals(link)){' in s
+          assert 'if(HOME.equals(tab.url))showHomepage();' in s
+          assert 'selected.web.stopLoading();' in s
+          assert 'selected.web.loadUrl(HOME);' in s
+          assert 'showHomepage();' in s
+          assert 'private class DismissibleSheetScroll extends ScrollView{' in s
+          assert s.count('new DismissibleSheetScroll(popup)')==2
+          assert 'moveSheet(target,travel);' in s
+          assert 'finishSheetDrag(target,travel);' in s
+          assert 'withEndAction(()->{decor.setTranslationY(0);popup.dismiss();})' in s
+          assert menu.count('Personalizar aparência')==1
+          assert menu.count('this::showVistaStreamConnection')==1
+          assert 'Ligar e abrir VistaStream' not in menu
+          assert 'Ferramentas avançadas' not in menu
+          assert menu.index('Explorar e reproduzir')<menu.index('PROTEÇÃO E REPRODUÇÃO')
+          for unique in ('this::showCrashDiagnostics','this::showAutoScanStatus',
+                         'this::openDemoPlayer','this::castCurrentPlayback',
+                         'this::showExportOptions','this::showCrawlExports',
+                         'this::toggleDesktop','this::confirmClearHistory',
+                         'this::shareCurrentPage','this::explainPageLock'):
+              assert unique in menu,unique
+          for core in ('private void showDetected(){','private void showLibrary(){',
+                       'private void showInspector(){','private void showCrawler(){',
+                       'private boolean sendToVistaStream(','private void openNativePlayer(',
+                       'private void showQuickActions(){','private void showTabOverview(){',
+                       'private void showAppearance(){','VistaBrowserUpdates.check(this,false)'):
+              assert core in s,core
+          print('PASS Home UI state, swipe-dismiss and deduplicated capabilities')
           PY
+      - name: Install Android SDK
+        run: |
+          echo "ANDROID_HOME=${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}" >> "$GITHUB_ENV"
+          SDKMANAGER=$(find /usr/local/lib/android/sdk -type f -name sdkmanager -print -quit)
+          test -n "$SDKMANAGER"
+          echo "SDKMANAGER=$SDKMANAGER" >> "$GITHUB_ENV"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" 'platforms;android-36' 'build-tools;36.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.6.0'
+      - name: Test extraction engine and Cast eligibility
+        working-directory: hb-v18
+        run: |
+          mkdir -p /tmp/hb18-tests
+          javac -d /tmp/hb18-tests app/src/main/java/com/harvester/browser/core/*.java core-tests/CoreTests.java
+          java -cp /tmp/hb18-tests CoreTests
+      - name: Compile Android APK
+        working-directory: hb-v18
+        run: gradle :app:assembleDebug --stacktrace --no-daemon
+      - name: Stage APK
+        run: |
+          test -s hb-v18/app/build/outputs/apk/debug/app-debug.apk
+          cp hb-v18/app/build/outputs/apk/debug/app-debug.apk VistaBrowser-v3.7.0.apk
+          sha256sum VistaBrowser-v3.7.0.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VistaBrowser-v3.7.0
+          path: VistaBrowser-v3.7.0.apk
+          if-no-files-found: error
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: vistabrowser-v3.7.0
+          target_commitish: ${{ github.sha }}
+          name: VistaBrowser v3.7.0 — Unified Menus, Home and Gestures
+          body: |
+            VistaBrowser v3.7.0 — focused reliability and premium UX.
+            Fixes black Home on return, switching tabs and the Home button:
+            about:blank now renders the native customizable start page rather
+            than reattaching a blank black WebView.
+            Removes the Advanced Tools submenu entirely, moving only unique
+            actions into the profile dashboard: page actions, diagnostics,
+            scanner status, export options, desktop mode and history clearing.
+            Removes duplicate Appearance and VistaStream links in that menu,
+            keeping their existing header action and detector tile.
+            Moves Protection and Playback after Explore and Play.
+            Adds true drag-to-dismiss modal sheets: the entire sheet follows
+            downward touch movement and animates to close, or springs back
+            on small drags. Supported on the profile and top controls menus.
+            Preserves the VistaStream Android bridge, scanner, playback,
+            Chromecast, page lock, browser, downloads and library.
+            Signed development APK: Android updates require matching signatures.
+          files: VistaBrowser-v3.7.0.apk
