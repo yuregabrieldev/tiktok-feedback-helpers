@@ -1,4 +1,4 @@
-name: VistaBrowser v4.2 — Inspect Crawler Integration
+name: VistaBrowser v4.2 — Simples Scraper Fully Integrated
 on:
   push:
     branches: [vistabrowser-v42-simples-scraper-integration]
@@ -530,27 +530,109 @@ jobs:
           assert (Path('hb-v18/app/src/main/res/drawable-nodpi/vb_flower_light.jpg').stat().st_size)>10000
           print('PASS v4.1: full theme repaint, warm Home, accent coverage, favicons, scanner and VistaStream preserved')
           PY
-      - name: Inspect browser crawler entry points and base app manifest
+      - name: Vendor the complete Simples Scraper 3.0.1 source tree
+        run: |
+          git fetch --depth=1 origin refs/tags/simples-scraper-v3.0.1:refs/tags/simples-scraper-v3.0.1
+          mkdir -p /tmp/simples-scraper-3.0.1
+          git archive simples-scraper-v3.0.1 video-harvester-android/app/src/main/java/com/yure/videoharvester | tar -x -C /tmp/simples-scraper-3.0.1
+          mkdir -p hb-v18/app/src/main/java/com/yure/videoharvester
+          cp /tmp/simples-scraper-3.0.1/video-harvester-android/app/src/main/java/com/yure/videoharvester/*.java hb-v18/app/src/main/java/com/yure/videoharvester/
+          cp harvester-browser/v4.2.0/VistaScraperActivity.java hb-v18/app/src/main/java/com/yure/videoharvester/
+          test "$(find hb-v18/app/src/main/java/com/yure/videoharvester -maxdepth 1 -type f -name '*.java' | wc -l)" -ge 25
+      - name: Add unified Crawler hub and preserve full Simples Scraper engine
+        run: |
+          python3 harvester-browser/v4.2.0/install-scraper.py
+          grep -q "versionName '4.2.0'" hb-v18/app/build.gradle
+      - name: Test complete embedded scraper functionality and VistaBrowser regression
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          root=Path('hb-v18')
-          s=(root/'app/src/main/java/com/harvester/browser/MainActivity.java').read_text()
-          for name in ('private void showCrawler(){','private void showDetected(){',
-                 'private void showMenu(){','private void showAdvancedBrowserSettings(){',
-                 'private void showExportOptions(){','private void showCrawlExports(){',
-                 'private void showLibrary(){','private void panelLine(',
-                 'private void applyBrowserTheme(){'):
-              pos=s.find(name)
-              if pos<0:print('NOT FOUND '+name);continue
-              end=s.find('\n    private ',pos+20)
-              if end<0:end=min(len(s),pos+14000)
-              print('=== BEGIN',name)
-              print(s[pos:min(end,pos+12000)])
-              print('=== END',name)
-          for name in ('app/build.gradle','app/src/main/AndroidManifest.xml',
-                       'app/src/main/res/values/styles.xml'):
-              p=root/name
-              print('=== FILE',name)
-              print(p.read_text()[:6000] if p.exists() else 'NOT FOUND')
+          app=Path('hb-v18/app/src/main')
+          base=app/'java/com/yure/videoharvester'
+          vb=(app/'java/com/harvester/browser/MainActivity.java').read_text()
+          manifest=(app/'AndroidManifest.xml').read_text()
+          gradle=Path('hb-v18/app/build.gradle').read_text()
+          assert 'private void showCrawler(){' in vb
+          assert 'private void showDomainCrawlerLegacy(){' in vb
+          for name in ('MainActivity','MainActivityV12','MainActivityV13','MainActivityV14',
+                       'MainActivityV15','MainActivityV16','MainActivityV17','MainActivityV18',
+                       'MainActivityV19','MainActivityV20','MainActivityV21','MainActivityV22',
+                       'MainActivityV24','MainActivityV25','PlayerInspectorActivityV28',
+                       'BrCatalogEngine','BrTitleParser','BrCatalogActivity',
+                       'HarvesterVistaBridge','ScanNotificationService',
+                       'PlaybackTestActivity','VistaScraperActivity'):
+              assert (base/(name+'.java')).exists(),name
+          assert 'org.jsoup:jsoup:1.18.3' in gradle
+          assert "versionCode 33" in gradle
+          for name in ('VistaScraperActivity','PlayerInspectorActivityV28',
+                       'BrCatalogActivity','PlaybackTestActivity','ScanNotificationService'):
+              assert 'com.yure.videoharvester.'+name in manifest,name
+          for label in ('Scan completo de websites','Análise de iframes',
+                        'Descobertas e players','Vídeos encontrados',
+                        'Biblioteca do scanner','Catálogo de fontes BR',
+                        'Configurações e backups do scanner','Crawler técnico do VistaBrowser'):
+              assert label in vb,label
+          for core in ('showMenu(){','showPageActions(){','showLibrary(){',
+                       'showDetected(){','showInspector(){','showCrawlExports(){',
+                       'showAutoScanStatus(){','sendToVistaStream(',
+                       'showAppearance(){','renderOperaTabs(){'):
+              assert core in vb,core
+          print('PASS full source and navigation coverage for embedded Simples Scraper')
           PY
+      - name: Install Android SDK
+        run: |
+          echo "ANDROID_HOME=${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}" >> "$GITHUB_ENV"
+          SDKMANAGER=$(find /usr/local/lib/android/sdk -type f -name sdkmanager -print -quit)
+          test -n "$SDKMANAGER"
+          echo "SDKMANAGER=$SDKMANAGER" >> "$GITHUB_ENV"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" 'platforms;android-36' 'build-tools;36.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.6.0'
+      - name: Test extraction engine and Cast eligibility
+        working-directory: hb-v18
+        run: |
+          mkdir -p /tmp/hb18-tests
+          javac -d /tmp/hb18-tests app/src/main/java/com/harvester/browser/core/*.java core-tests/CoreTests.java
+          java -cp /tmp/hb18-tests CoreTests
+      - name: Compile Android APK
+        working-directory: hb-v18
+        run: gradle :app:assembleDebug --stacktrace --no-daemon
+      - name: Stage APK
+        run: |
+          test -s hb-v18/app/build/outputs/apk/debug/app-debug.apk
+          cp hb-v18/app/build/outputs/apk/debug/app-debug.apk VistaBrowser-v4.2.0.apk
+          sha256sum VistaBrowser-v4.2.0.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VistaBrowser-v4.2.0
+          path: VistaBrowser-v4.2.0.apk
+          if-no-files-found: error
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: vistabrowser-v4.2.0
+          target_commitish: ${{ github.sha }}
+          name: VistaBrowser v4.2.0 — Simples Scraper Native Integration
+          body: |
+            VistaBrowser v4.2.0 — Simples Scraper unified into VistaBrowser.
+            Embeds the complete original Simples Scraper 3.0.1 Android engine,
+            including its entire Java inheritance stack and utility services:
+            page scan, sitemap/discovery, iframe analysis and persistent queues,
+            player inspector, discoveries, source classification, video approval,
+            catalog/library, browser playback tests, opt-in Brazilian sources,
+            JSON backup/import/export and notification service.
+            The built-in Crawler is now a premium tool hub for all embedded
+            scanner screens; you can send the currently open HTTPS URL directly
+            to the scanner and choose when to start. Scanner navigation stays
+            inside VistaBrowser's APK, with no separate app installation.
+            The old domain crawler remains available as a technical option,
+            including robots/rate limits and HTML/CSS/JS ZIP archives.
+            The original independent Simples Scraper APK/repository is unmodified.
+            Scanner data is private to VistaBrowser and will not automatically
+            import data from a previously installed standalone Simples Scraper.
+            New embedded screens follow the VistaBrowser light/dark and accent palette.
+            Browser, Media3 playback, Chromecast and VistaStream Intent integrations
+            are kept. Sources are candidates, not guarantees of playable video.
+            APK debug signing requires matching signer for in-place updates.
+          files: VistaBrowser-v4.2.0.apk
