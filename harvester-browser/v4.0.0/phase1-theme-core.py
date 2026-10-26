@@ -51,8 +51,16 @@ new='''    public static int BG=0xFF181A17, INK=0xFFF2F0E4, BLUE=0xFFE1DEC9,
                    avg<104?0xFFE6E5DB:0xFFDCDACF;
         return (a<<24)|(mapped&0x00FFFFFF);
     }
+    public static int accentInk(){
+        if(!LIGHT)return ACCENT;
+        int r=Color.red(ACCENT),g=Color.green(ACCENT),b=Color.blue(ACCENT);
+        int avg=(r+g+b)/3;
+        if(avg<165)return ACCENT;
+        return Color.rgb((int)(r*0.51f),(int)(g*0.51f),(int)(b*0.51f));
+    }
     public static int border(int color){
-        if(!LIGHT || color==ACCENT)return color;
+        if(!LIGHT)return color;
+        if(color==ACCENT)return accentInk();
         int a=Color.alpha(color);
         if(a<32 || !mutedNeutral(color))return color;
         int avg=(Color.red(color)+Color.green(color)+Color.blue(color))/3;
@@ -60,7 +68,8 @@ new='''    public static int BG=0xFF181A17, INK=0xFFF2F0E4, BLUE=0xFFE1DEC9,
         return color;
     }
     public static int ink(int color){
-        if(!LIGHT || color==ACCENT)return color;
+        if(!LIGHT)return color;
+        if(color==ACCENT)return accentInk();
         final int a=Color.alpha(color);
         final int r=Color.red(color),g=Color.green(color),b=Color.blue(color);
         int avg=(r+g+b)/3;
