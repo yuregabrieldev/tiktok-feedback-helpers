@@ -22,6 +22,8 @@ jobs:
           cat VistaController-v0.2.0-patch.part0{0..8} | base64 --decode > VistaController-v0.2.0-patch.tar.xz
           tar -xJf VistaController-v0.2.0-patch.tar.xz
           test -f VistaController/mobile/src/main/java/dev/vista/controller/WifiRemoteClient.kt
+          # BouncyCastle jars include duplicate Java 9 OSGi metadata, irrelevant on Android.
+          sed -i 's@packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}" }@packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"; resources.excludes += "META-INF/versions/**" }@' VistaController/mobile/build.gradle.kts
           # Connected-device typed startForeground is an Android 14+ API.
           sed -i 's/Build.VERSION.SDK_INT >= 29) startForeground/Build.VERSION.SDK_INT >= 34) startForeground/g' \
             VistaController/mobile/src/main/java/dev/vista/controller/ConnectionService.kt \
