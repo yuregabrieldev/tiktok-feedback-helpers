@@ -19,6 +19,9 @@ jobs:
           cat VistaController-source.part0{0..5} | base64 --decode > VistaController-src.tar.xz
           tar -xJf VistaController-src.tar.xz
           test -f VistaController/settings.gradle.kts
+          cat VistaController-v0.2.0-patch.part0{0..8} | base64 --decode > VistaController-v0.2.0-patch.tar.xz
+          tar -xJf VistaController-v0.2.0-patch.tar.xz
+          test -f VistaController/mobile/src/main/java/dev/vista/controller/WifiRemoteClient.kt
           # Connected-device typed startForeground is an Android 14+ API.
           sed -i 's/Build.VERSION.SDK_INT >= 29) startForeground/Build.VERSION.SDK_INT >= 34) startForeground/g' \
             VistaController/mobile/src/main/java/dev/vista/controller/ConnectionService.kt \
@@ -42,13 +45,13 @@ jobs:
         run: gradle --no-daemon --stacktrace :mobile:assembleDebug :tvbridge:assembleDebug
       - name: Prepare release assets
         run: |
-          cp VistaController/mobile/build/outputs/apk/debug/mobile-debug.apk VistaController-Mobile-v0.1.0.apk
-          cp VistaController/tvbridge/build/outputs/apk/debug/tvbridge-debug.apk VistaController-TV-Bridge-v0.1.0.apk
+          cp VistaController/mobile/build/outputs/apk/debug/mobile-debug.apk VistaController-Mobile-v0.2.0.apk
+          cp VistaController/tvbridge/build/outputs/apk/debug/tvbridge-debug.apk VistaController-TV-Bridge-v0.2.0.apk
           sha256sum VistaController-*.apk > SHA256SUMS.txt
       - name: Upload compiled APKs
         uses: actions/upload-artifact@v4
         with:
-          name: VistaController-v0.1.0-APKs
+          name: VistaController-v0.2.0-APKs
           path: |
             VistaController-*.apk
             SHA256SUMS.txt
@@ -56,6 +59,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release upload vistacontroller-v0.1.0 \
-            VistaController-Mobile-v0.1.0.apk VistaController-TV-Bridge-v0.1.0.apk SHA256SUMS.txt \
-            --clobber
+          gh release create vistacontroller-v0.2.0 \
+            VistaController-Mobile-v0.2.0.apk VistaController-TV-Bridge-v0.2.0.apk SHA256SUMS.txt \
+            --target "$GITHUB_SHA" --title 'VistaController v0.2.0 · Wi-Fi Remote beta' --prerelease \
+            --notes 'v0.2: controlo Android TV Remote v2 por Wi-Fi TLS, nova interface premium com botões de comando, carrossel compacto de apps com ícones reais, TV Bridge para LAN e ponteiro por Acessibilidade, Bluetooth HID opcional. A TV exige emparelhamento Wi-Fi próprio por código no ecrã. APKs beta assinados em debug. Testes em Hisense necessários. Algumas teclas específicas e o ponteiro via Acessibilidade dependem das capacidades do firmware.'
