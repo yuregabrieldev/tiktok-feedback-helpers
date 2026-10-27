@@ -40,11 +40,16 @@ jobs:
           echo '8dafd0b7ea568f3d617bee3fde2f4498f18b06be16d5021444d0223dbdbd3d2d  VistaController-v0.2.5-motion.tar.xz' | sha256sum -c -
           tar -xJf VistaController-v0.2.5-motion.tar.xz
           test -f VistaController/mobile/src/main/java/dev/vista/controller/AirMotionProcessor.kt
+          cat VistaController-v0.2.6-fusion.part0{0..2} | base64 --decode > VistaController-v0.2.6-fusion.patch.xz
+          echo 'ee37848d60b8d190f507112e980fb1abcf126fb941262c02029489d7dda8a3a1  VistaController-v0.2.6-fusion.patch.xz' | sha256sum -c -
+          touch VistaController/THIRD_PARTY_NOTICES.md
+          xz -dc VistaController-v0.2.6-fusion.patch.xz | patch --batch --forward -p1
+          test -f VistaController/THIRD_PARTY_NOTICES.md
 
           rm -f VistaController/tvbridge/src/main/java/dev/vista/tvbridge/TvAccessService.kt VistaController/tvbridge/src/main/res/xml/accessibility_config.xml
           ! grep -q 'BIND_ACCESSIBILITY_SERVICE' VistaController/tvbridge/src/main/AndroidManifest.xml
           ! grep -q 'TvAccessService' VistaController/tvbridge/src/main/AndroidManifest.xml
-          grep -q 'versionName = "0.2.5"' VistaController/mobile/build.gradle.kts
+          grep -q 'versionName = "0.2.6"' VistaController/mobile/build.gradle.kts
           # BouncyCastle jars include duplicate Java 9 OSGi metadata, irrelevant on Android.
           sed -i 's@packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}" }@packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"; resources.excludes += "META-INF/versions/**" }@' VistaController/mobile/build.gradle.kts
           # Connected-device typed startForeground is an Android 14+ API.
@@ -70,20 +75,20 @@ jobs:
         run: gradle --no-daemon --stacktrace :mobile:testDebugUnitTest :mobile:assembleDebug
       - name: Prepare release assets
         run: |
-          cp VistaController/mobile/build/outputs/apk/debug/mobile-debug.apk VistaController-Mobile-v0.2.5.apk
-          sha256sum VistaController-Mobile-v0.2.5.apk > SHA256SUMS.txt
+          cp VistaController/mobile/build/outputs/apk/debug/mobile-debug.apk VistaController-Mobile-v0.2.6.apk
+          sha256sum VistaController-Mobile-v0.2.6.apk > SHA256SUMS.txt
       - name: Upload compiled mobile APK
         uses: actions/upload-artifact@v4
         with:
-          name: VistaController-v0.2.5-Mobile
+          name: VistaController-v0.2.6-Mobile
           path: |
-            VistaController-Mobile-v0.2.5.apk
+            VistaController-Mobile-v0.2.6.apk
             SHA256SUMS.txt
       - name: Publish Github Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create vistacontroller-v0.2.5 \
-            VistaController-Mobile-v0.2.5.apk SHA256SUMS.txt \
-            --target "$GITHUB_SHA" --title 'VistaController v0.2.5 · Air Mouse & Scroll' --prerelease \
-            --notes 'v0.2.5 Beta: correção da acumulação de giroscópio (antes perdia quase todos os movimentos), filtro de tremores, compensação pela inclinação do telemóvel, sensibilidade de 0,5x a 4x, inversão X/Y com preferências guardadas. Scroll HID Wheel de dois dedos no touchpad, scroll por inclinação em modo Air Scroll e botões para rolar. Movimento dividido em pacotes de 8 bits sem truncar. Testes unitários automáticos incluídos. Não altera a TV Bridge (mantém v0.2.2); precisa de validação na Hisense.'
+          gh release create vistacontroller-v0.2.6 \
+            VistaController-Mobile-v0.2.6.apk SHA256SUMS.txt \
+            --target "$GITHUB_SHA" --title 'VistaController v0.2.6 · Air Mouse Fusion beta' --prerelease \
+            --notes 'Nova beta do Air Mouse inspirada pelos projetos MIT keyboardku e Linkpad (créditos e licença no código). Combina três eixos do giroscópio com acelerómetro para estabilizar movimento horizontal/vertical em diferentes inclinações; suavização adaptativa, aceleração ligeira, acumulação contínua de deltas, calibração de bias no ecrã Air Mouse, sensibilidade 0.5x-4x, inversão X/Y, touchpad e scroll mantidos. O botão Calibrar exige segurar imóvel por ~120 amostras. Testes unitários incluídos. Sem alterações no TV Bridge. Requer teste físico na Hisense; beta debug.'
