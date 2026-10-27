@@ -25,9 +25,13 @@ jobs:
           cat VistaController-v0.2.1-ui.part0{0..4} | base64 --decode > VistaController-v0.2.1-ui.tar.xz
           echo '322c32cec264a3a746c48a39f2a7dee37983becd23edf61cff2aea3099747515  VistaController-v0.2.1-ui.tar.xz' | sha256sum -c -
           tar -xJf VistaController-v0.2.1-ui.tar.xz
-          grep -q 'versionName = "0.2.1"' VistaController/mobile/build.gradle.kts
-          # Material3 ModalBottomSheet uses an experimental API in the pinned Compose version.
-          sed -i '/@Composable private fun RemotePage(/i @OptIn(ExperimentalMaterial3Api::class)' VistaController/mobile/src/main/java/dev/vista/controller/MainActivity.kt
+          cat VistaController-v0.2.2-safe.part0{0..3} | base64 --decode > VistaController-v0.2.2-safe-patch.tar.xz
+          echo 'a30959847866ed782fa614a4a4528d15c487acae84c21f58bb177767c3c9e972  VistaController-v0.2.2-safe-patch.tar.xz' | sha256sum -c -
+          tar -xJf VistaController-v0.2.2-safe-patch.tar.xz
+          rm -f VistaController/tvbridge/src/main/java/dev/vista/tvbridge/TvAccessService.kt VistaController/tvbridge/src/main/res/xml/accessibility_config.xml
+          ! grep -q 'BIND_ACCESSIBILITY_SERVICE' VistaController/tvbridge/src/main/AndroidManifest.xml
+          ! grep -q 'TvAccessService' VistaController/tvbridge/src/main/AndroidManifest.xml
+          grep -q 'versionName = "0.2.2"' VistaController/mobile/build.gradle.kts
           # BouncyCastle jars include duplicate Java 9 OSGi metadata, irrelevant on Android.
           sed -i 's@packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}" }@packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"; resources.excludes += "META-INF/versions/**" }@' VistaController/mobile/build.gradle.kts
           # Connected-device typed startForeground is an Android 14+ API.
@@ -53,13 +57,21 @@ jobs:
         run: gradle --no-daemon --stacktrace :mobile:assembleDebug :tvbridge:assembleDebug
       - name: Prepare release assets
         run: |
-          cp VistaController/mobile/build/outputs/apk/debug/mobile-debug.apk VistaController-Mobile-v0.2.1.apk
-          cp VistaController/tvbridge/build/outputs/apk/debug/tvbridge-debug.apk VistaController-TV-Bridge-v0.2.1.apk
+          cp VistaController/mobile/build/outputs/apk/debug/mobile-debug.apk VistaController-Mobile-v0.2.2.apk
+          cp VistaController/tvbridge/build/outputs/apk/debug/tvbridge-debug.apk VistaController-TV-Bridge-v0.2.2.apk
           sha256sum VistaController-*.apk > SHA256SUMS.txt
+      - name: Verify no Accessibility permission or service in TV APK
+        run: |
+          AAPT2="$ANDROID_HOME/build-tools/35.0.0/aapt2"
+          "$AAPT2" dump xmltree VistaController-TV-Bridge-v0.2.2.apk AndroidManifest.xml > /tmp/vistacontroller-bridge-manifest.txt
+          if grep -Eq 'BIND_ACCESSIBILITY_SERVICE|accessibilityservice.AccessibilityService|TvAccessService' /tmp/vistacontroller-bridge-manifest.txt; then
+            echo "Security verification failed: unexpected Accessibility service"; exit 1
+          fi
+          echo "PASS: no Accessibility service or sensitive binding in TV APK"
       - name: Upload compiled APKs
         uses: actions/upload-artifact@v4
         with:
-          name: VistaController-v0.2.1-APKs
+          name: VistaController-v0.2.2-APKs
           path: |
             VistaController-*.apk
             SHA256SUMS.txt
@@ -67,7 +79,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create vistacontroller-v0.2.1 \
-            VistaController-Mobile-v0.2.1.apk VistaController-TV-Bridge-v0.2.1.apk SHA256SUMS.txt \
-            --target "$GITHUB_SHA" --title 'VistaController v0.2.1 · Responsive Remote beta' --prerelease \
-            --notes 'v0.2.1: ecrã do comando redesenhado para telemóveis estreitos. Quatro ações principais por linha, D-pad/OK grandes, volume e canais em cartões separados, reprodução em 3+2 botões, funções secundárias em Mais funções (bottom sheet), teclado e 123 disponíveis, carrossel de apps mantido. Ligações Wi-Fi Remote v2, Bridge e Air Mouse mantidas da v0.2.0. APKs beta debug; interação real com TV não validada.'
+          gh release create vistacontroller-v0.2.2 \
+            VistaController-Mobile-v0.2.2.apk VistaController-TV-Bridge-v0.2.2.apk SHA256SUMS.txt \
+            --target "$GITHUB_SHA" --title 'VistaController v0.2.2 · TV Bridge sem Acessibilidade' --prerelease \
+            --notes 'v0.2.2 corrige o bloqueio conhecido do Play Protect retirando o serviço de Acessibilidade do TV Bridge. A ponte mantém PIN local e atalhos com os ícones dos apps. Comando por Android TV Remote v2 via Wi-Fi; Air Mouse apenas via Bluetooth HID compatível. Inclui layout responsivo v0.2.1: botões maiores, D-pad central, reprodução em 3+2, Mais funções. APKs beta assinados com chave debug; requer teste físico na Hisense. Não desative o Play Protect.'
