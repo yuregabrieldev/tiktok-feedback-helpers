@@ -63,7 +63,7 @@ jobs:
       - name: Verify no Accessibility permission or service in TV APK
         run: |
           AAPT2="$ANDROID_HOME/build-tools/35.0.0/aapt2"
-          "$AAPT2" dump xmltree VistaController-TV-Bridge-v0.2.2.apk AndroidManifest.xml > /tmp/vistacontroller-bridge-manifest.txt
+          "$AAPT2" dump xmltree --file AndroidManifest.xml VistaController-TV-Bridge-v0.2.2.apk > /tmp/vistacontroller-bridge-manifest.txt
           if grep -Eq 'BIND_ACCESSIBILITY_SERVICE|accessibilityservice.AccessibilityService|TvAccessService' /tmp/vistacontroller-bridge-manifest.txt; then
             echo "Security verification failed: unexpected Accessibility service"; exit 1
           fi
