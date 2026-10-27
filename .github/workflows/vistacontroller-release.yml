@@ -26,6 +26,8 @@ jobs:
           echo '322c32cec264a3a746c48a39f2a7dee37983becd23edf61cff2aea3099747515  VistaController-v0.2.1-ui.tar.xz' | sha256sum -c -
           tar -xJf VistaController-v0.2.1-ui.tar.xz
           grep -q 'versionName = "0.2.1"' VistaController/mobile/build.gradle.kts
+          # Material3 ModalBottomSheet uses an experimental API in the pinned Compose version.
+          sed -i '/@Composable private fun RemotePage(/i @OptIn(ExperimentalMaterial3Api::class)' VistaController/mobile/src/main/java/dev/vista/controller/MainActivity.kt
           # BouncyCastle jars include duplicate Java 9 OSGi metadata, irrelevant on Android.
           sed -i 's@packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}" }@packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"; resources.excludes += "META-INF/versions/**" }@' VistaController/mobile/build.gradle.kts
           # Connected-device typed startForeground is an Android 14+ API.
