@@ -19,8 +19,8 @@ jobs:
           cat VistaController-source.part0{0..5} | base64 --decode > VistaController-src.tar.xz
           tar -xJf VistaController-src.tar.xz
           test -f VistaController/settings.gradle.kts
-          cat VistaController-v0.2.1-patch.part0{0..8} | base64 --decode > VistaController-v0.2.1-patch.tar.xz
-          tar -xJf VistaController-v0.2.1-patch.tar.xz
+          cat VistaController-v0.2.0-patch.part0{0..8} | base64 --decode > VistaController-v0.2.0-patch.tar.xz
+          tar -xJf VistaController-v0.2.0-patch.tar.xz
           test -f VistaController/mobile/src/main/java/dev/vista/controller/WifiRemoteClient.kt
           cat VistaController-v0.2.1-ui.part0{0..4} | base64 --decode > VistaController-v0.2.1-ui.tar.xz
           echo '322c32cec264a3a746c48a39f2a7dee37983becd23edf61cff2aea3099747515  VistaController-v0.2.1-ui.tar.xz' | sha256sum -c -
