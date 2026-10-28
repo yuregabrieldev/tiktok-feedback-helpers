@@ -9,6 +9,7 @@ on:
       - harvester-browser/v4.3.3/**
       - harvester-browser/v4.3.4/**
       - harvester-browser/v4.3.5/**
+      - harvester-browser/v4.3.6/**
       - .github/workflows/vistabrowser-v434.yml
   workflow_dispatch:
 permissions:
@@ -725,6 +726,12 @@ jobs:
           python3 harvester-browser/v4.3.5/upgrade.py
           grep -q "versionName '4.3.5'" hb-v18/app/build.gradle
           grep -q 'VistaIdAccountActivity' hb-v18/app/src/main/AndroidManifest.xml
+      - name: Add Android TV landscape support
+        run: |
+          python3 harvester-browser/v4.3.6/tv_mode.py
+          grep -q "versionName '4.3.6'" hb-v18/app/build.gradle
+          grep -q 'LEANBACK_LAUNCHER' hb-v18/app/src/main/AndroidManifest.xml
+
       - name: Install Android SDK
         run: |
           echo "ANDROID_HOME=${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}" >> "$GITHUB_ENV"
@@ -748,20 +755,20 @@ jobs:
       - name: Stage APK
         run: |
           test -s hb-v18/app/build/outputs/apk/debug/app-debug.apk
-          cp hb-v18/app/build/outputs/apk/debug/app-debug.apk VistaBrowser-v4.3.5.apk
-          sha256sum VistaBrowser-v4.3.5.apk
+          cp hb-v18/app/build/outputs/apk/debug/app-debug.apk VistaBrowser-v4.3.6.apk
+          sha256sum VistaBrowser-v4.3.6.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: VistaBrowser-v4.3.5
-          path: VistaBrowser-v4.3.5.apk
+          name: VistaBrowser-v4.3.6
+          path: VistaBrowser-v4.3.6.apk
           if-no-files-found: error
       - uses: softprops/action-gh-release@v2
         with:
-          tag_name: vistabrowser-v4.3.5
+          tag_name: vistabrowser-v4.3.6
           target_commitish: ${{ github.sha }}
-          name: VistaBrowser v4.3.5 — Vista ID opcional
+          name: VistaBrowser v4.3.6 — Android TV e Vista ID
           body: |
-            VistaBrowser v4.3.5 — Vista ID local opcional, sem modificar histórico,\n            favoritos, fontes, capturas ou scanner. Não sincroniza com a cloud.\n            Mantém a identificação melhorada por URL e metadados.
+            VistaBrowser v4.3.6 — entrada Android TV e paisagem só na TV.\n            Vista ID local opcional, sem modificar histórico,\n            favoritos, fontes, capturas ou scanner. Não sincroniza com a cloud.\n            Mantém a identificação melhorada por URL e metadados.
             O inspetor limpa códigos temporários de nomes, lê o ano do caminho
             original da página, apresenta os metadados antes da importação e
             encaminha o ano para o editor do VistaStream v0.15.6.
@@ -769,4 +776,4 @@ jobs:
             de guardar, preservando inspeção DOM/iframe, bloqueio de pop-ups,
             biblioteca, scanner premium, player e Chromecast.
             Os links HLS assinados continuam temporários.
-          files: VistaBrowser-v4.3.5.apk
+          files: VistaBrowser-v4.3.6.apk
