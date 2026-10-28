@@ -25,6 +25,13 @@ features='''    <uses-feature android:name="android.software.leanback" android:r
 assert '<application' in m
 m=m.replace('<application',features+'    <application',1)
 manifest.write_text(m,encoding="utf-8")
+# Only remove the Java final modifier; the TV entry shares all of the existing
+# browser implementation, scanner and settings without editing onCreate.
+main=root/"src/main/java/com/harvester/browser/MainActivity.java"
+main_source=main.read_text(encoding="utf-8")
+assert "final class MainActivity" in main_source, "Browser MainActivity modifier changed"
+main.write_text(main_source.replace("final class MainActivity", "class MainActivity", 1),encoding="utf-8")
+
 # Java activity inherits the same premium browser; a TV-specific manifest entry
 # controls landscape without rotating the phone edition.
 tv=root/"src/main/java/com/harvester/browser/VistaTvEntryActivity.java"
