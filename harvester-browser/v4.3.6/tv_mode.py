@@ -6,9 +6,20 @@ root=Path("hb-v18/app")
 manifest=root/"src/main/AndroidManifest.xml"
 m=manifest.read_text(encoding="utf-8")
 # Android TV entry point for the existing browser rather than a second app.
-launcher='<category android:name="android.intent.category.LAUNCHER" />'
-assert launcher in m, "Cannot find VistaBrowser launcher entry"
-m=m.replace(launcher,launcher+'\n                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />',1)
+# The existing browser's manifest does not use a conventional MAIN/LAUNCHER filter;
+# add a separate TV alias without changing its phone entry.
+assert '    </application>' in m, "Manifest application end changed"
+m=m.replace('    </application>', '''        <activity-alias
+            android:name="com.harvester.browser.VistaBrowserTvEntry"
+            android:targetActivity="com.harvester.browser.MainActivity"
+            android:exported="true"
+            android:label="VistaBrowser">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER"/>
+            </intent-filter>
+        </activity-alias>
+    </application>''',1)
 features='''    <uses-feature android:name="android.software.leanback" android:required="false" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
 '''
