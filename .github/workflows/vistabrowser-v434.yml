@@ -10,7 +10,6 @@ on:
       - harvester-browser/v4.3.4/**
       - harvester-browser/v4.3.5/**
       - harvester-browser/v4.3.6/**
-      - harvester-browser/v4.3.6/**
       - .github/workflows/vistabrowser-v434.yml
   workflow_dispatch:
 permissions:
@@ -727,12 +726,6 @@ jobs:
           python3 harvester-browser/v4.3.5/upgrade.py
           grep -q "versionName '4.3.5'" hb-v18/app/build.gradle
           grep -q 'VistaIdAccountActivity' hb-v18/app/src/main/AndroidManifest.xml
-      - name: Add Android TV landscape support
-        run: |
-          python3 harvester-browser/v4.3.6/tv_mode.py
-          grep -q "versionName '4.3.6'" hb-v18/app/build.gradle
-          grep -q 'LEANBACK_LAUNCHER' hb-v18/app/src/main/AndroidManifest.xml
-
       - name: Install VistaBrowser TV widescreen interface
         run: |
           python3 harvester-browser/v4.3.6/upgrade.py
