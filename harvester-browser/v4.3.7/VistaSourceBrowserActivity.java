@@ -30,6 +30,14 @@ public final class VistaSourceBrowserActivity extends Activity {
         title("Fontes detetadas automaticamente pelo inspetor, sem cookies ou vídeos descarregados. " +
             "Apenas títulos identificados ou aprovados por ti são exportados.",14);
         summary=title("",16);
+        android.widget.CheckBox automatic=new android.widget.CheckBox(this);
+        automatic.setText("Analisar vídeos e iframes acessíveis automaticamente no inspetor");
+        automatic.setTextColor(Color.WHITE);
+        automatic.setChecked(getSharedPreferences("vista_smart_crawler_v1",MODE_PRIVATE)
+            .getBoolean("enabled",false));
+        automatic.setOnCheckedChangeListener((b,on)->getSharedPreferences(
+            "vista_smart_crawler_v1",MODE_PRIVATE).edit().putBoolean("enabled",on).apply());
+        panel.addView(automatic);
         button("Rever correspondências pendentes",()->review());
         button("Exportar manifest.json",()->{
             Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);
