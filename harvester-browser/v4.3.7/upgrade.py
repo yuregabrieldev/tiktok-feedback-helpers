@@ -69,6 +69,51 @@ xml = xml.replace(anchor, '''        <activity android:name="com.yure.videoharve
 ''' + anchor, 1)
 manifest.write_text(xml, encoding="utf-8")
 
+
+# Resume a completed DownloadManager APK transfer after process death or
+# after the user has approved "install unknown apps". Never lose its ID
+# before Android successfully opens the installer.
+updater = root / "src/main/java/com/harvester/browser/VistaBrowserUpdates.java"
+updates = updater.read_text(encoding="utf-8")
+old = '        if(!manual && System.currentTimeMillis()-prefs.getLong("checked_at",0)<INTERVAL)return;'
+assert updates.count(old)==1, "VistaBrowser updater throttle anchor changed"
+new = """        if(!manual){
+            long id=prefs.getLong("pending_id",-1L);
+            if(id>0){
+                DownloadManager mgr=(DownloadManager)activity.getSystemService(Context.DOWNLOAD_SERVICE);
+                if(mgr!=null){
+                    try(Cursor cursor=mgr.query(new DownloadManager.Query().setFilterById(id))){
+                        if(cursor!=null && cursor.moveToFirst()){
+                            int state=cursor.getInt(cursor.getColumnIndexOrThrow(
+                                DownloadManager.COLUMN_STATUS));
+                            if(state==DownloadManager.STATUS_SUCCESSFUL){
+                                validateAndInstall(activity,mgr,id,
+                                    prefs.getString("pending_digest",""));
+                                return;
+                            }
+                            if(state==DownloadManager.STATUS_PENDING ||
+                                state==DownloadManager.STATUS_RUNNING ||
+                                state==DownloadManager.STATUS_PAUSED)return;
+                        }
+                    }catch(Exception ignored){}
+                }
+                prefs.edit().remove("pending_id").remove("pending_digest").apply();
+            }
+            if(System.currentTimeMillis()-prefs.getLong("checked_at",0)<INTERVAL)return;
+        }"""
+updates = updates.replace(old,new,1)
+old='''        activity.getSharedPreferences(PREFS,Context.MODE_PRIVATE).edit()
+            .remove("pending_id").remove("pending_digest").apply();
+        if(Build.VERSION.SDK_INT>=26'''
+assert updates.count(old)==1, "VistaBrowser installer permission anchor changed"
+updates = updates.replace(old,'''        if(Build.VERSION.SDK_INT>=26''',1)
+anchor='''            activity.startActivity(installer);'''
+assert updates.count(anchor)==1, "VistaBrowser installer action anchor changed"
+updates=updates.replace(anchor,anchor+'''
+            activity.getSharedPreferences(PREFS,Context.MODE_PRIVATE).edit()
+                .remove("pending_id").remove("pending_digest").apply();''',1)
+updater.write_text(updates,encoding="utf-8")
+
 build = gradle.read_text(encoding="utf-8")
 assert "versionName '4.3.6'" in build and "versionCode 41" in build
 gradle.write_text(build.replace("versionName '4.3.6'","versionName '4.3.7'")
