@@ -39,6 +39,7 @@ public final class VistaSourceBrowserActivity extends Activity {
             "vista_smart_crawler_v1",MODE_PRIVATE).edit().putBoolean("enabled",on).apply());
         panel.addView(automatic);
         button("Rever correspondências pendentes",()->review());
+        button("Enviar fonte ao VistaStream",()->sendToVistaStream());
         button("Exportar manifest.json",()->{
             Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);
             i.setType("application/json");
@@ -69,6 +70,26 @@ public final class VistaSourceBrowserActivity extends Activity {
         summary.setText("Detetadas: "+items.length()+" · identificadas: "+accepted+
             " · por rever: "+(items.length()-accepted));
     }
+    private void sendToVistaStream(){
+        try {
+            String raw=VistaSourceCollector.export(this);
+            if(raw.getBytes(StandardCharsets.UTF_8).length>500000)
+                throw new Exception("Manifesto demasiado grande; exporta o ficheiro JSON.");
+            for(String pkg:new String[]{"com.vistastream.tv.debug","com.vistastream.tv"}){
+                Intent intent=new Intent("com.vistastream.tv.action.IMPORT_SOURCE");
+                intent.setClassName(pkg,
+                    "com.ivor.openstream.presentation.settings.VistaSourceActivity");
+                intent.putExtra("com.vistastream.tv.extra.SOURCE_JSON",raw);
+                try { startActivity(intent);return; }
+                catch(android.content.ActivityNotFoundException|SecurityException ignored){}
+            }
+            throw new Exception("Atualiza primeiro o VistaStream com suporte Vista Source.");
+        } catch(Exception error){
+            new AlertDialog.Builder(this).setTitle("Não foi possível enviar")
+                .setMessage(error.getMessage()).setPositiveButton("OK",null).show();
+        }
+    }
+
     private void review(){
         JSONArray items=VistaSourceCollector.entries(this);
         int next=-1;JSONObject candidate=null;
