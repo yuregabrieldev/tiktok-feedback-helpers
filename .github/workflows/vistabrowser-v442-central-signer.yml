@@ -808,6 +808,10 @@ jobs:
           mkdir -p /tmp/hb18-tests
           javac -d /tmp/hb18-tests app/src/main/java/com/harvester/browser/core/*.java core-tests/CoreTests.java
           java -cp /tmp/hb18-tests CoreTests
+      - name: Apply permanent signing version 4.4.1
+        run: |
+          python3 harvester-browser/v4.4.1/upgrade.py
+          grep -q "versionName '4.4.1'" hb-v18/app/build.gradle
       - name: Integrate Smart Crawler into iframe preview and persist progress
         run: |
           python3 harvester-browser/v4.4.2/upgrade.py
