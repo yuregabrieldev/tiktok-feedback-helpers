@@ -1,0 +1,860 @@
+name: VistaBrowser v4.4.1 — Assinatura fixa e atualizações
+on:
+  push:
+    branches: [feature/vistabrowser-v441-permanent-signing]
+    paths:
+      - harvester-browser/v4.3.0/**
+      - harvester-browser/v4.3.1/**
+      - harvester-browser/v4.3.2/**
+      - harvester-browser/v4.3.3/**
+      - harvester-browser/v4.3.4/**
+      - harvester-browser/v4.3.5/**
+      - harvester-browser/v4.3.6/**
+      - harvester-browser/v4.3.7/**
+      - harvester-browser/v4.3.8/**
+      - harvester-browser/v4.3.9/**
+      - harvester-browser/v4.4.0/**
+      - harvester-browser/v4.4.1/**
+      - .github/workflows/vistabrowser-v441-release.yml
+      - .github/workflows/vistabrowser-v434.yml
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Restore verified Harvester Browser v1.4 base
+        run: |
+          mkdir -p hb-v18
+          cat harvester-browser/v1.4.0/payload*.txt | base64 --decode > /tmp/hb-v14.txz
+          echo "2676ef48fb053bf276281e08745f29e7c184658cd2edfa0bb2a084c7379af2a2  /tmp/hb-v14.txz" | sha256sum -c -
+          tar -xJf /tmp/hb-v14.txz -C hb-v18
+      - name: Apply verified Cast integration v1.5
+        run: |
+          echo "97e43ab4f90eb24f24afb373677f070b78c4cfe741ad79bdf50e0b1f232fb235  harvester-browser/v1.5.0/cast-patch.xz.b64" | sha256sum -c -
+          base64 -d harvester-browser/v1.5.0/cast-patch.xz.b64 | xz -d >/tmp/cast-v15.py
+          (cd hb-v18 && python3 /tmp/cast-v15.py)
+      - name: Apply v1.6 and v1.7 improvements
+        run: |
+          (cd hb-v18 && python3 ../harvester-browser/v1.6.0/fix-cast.py)
+          (cd hb-v18 && python3 ../harvester-browser/v1.7.0/now-playing-cast.py)
+      - name: Integrate local video playback and cast
+        run: |
+          (cd hb-v18 && python3 ../harvester-browser/v1.8.0/install-player.py)
+          grep -q "versionName '1.8.0'" hb-v18/app/build.gradle
+          grep -q 'class NativePlayerActivity' hb-v18/app/src/main/java/com/harvester/browser/NativePlayerActivity.java
+      - name: Install safe player and receiver-state Cast diagnostics
+        run: |
+          (cd hb-v18 && python3 ../harvester-browser/v1.9.0/upgrade.py)
+          grep -q "versionName '1.9.0'" hb-v18/app/build.gradle
+          grep -q 'Reprodutor e Google Cast' hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java
+          grep -q 'class NativePlayerActivity' hb-v18/app/src/main/java/com/harvester/browser/NativePlayerActivity.java
+      - name: Restore actual VistaCast source
+        run: |
+          mkdir -p vista
+          base64 -d harvester-browser/v2.0.0/vistacast-base.tar.xz.b64 | xz -d | tar -xf - -C vista
+          test -f vista/app/src/main/java/com/vistacast/app/PlaybackService.java
+          test -f vista/app/src/main/java/com/vistacast/app/MainActivity.java
+      - name: Replace Harvester player with VistaCast CastPlayer implementation
+        run: |
+          python3 harvester-browser/v2.0.0/integrate-vistacast.py
+          grep -q "versionName '2.0.0'" hb-v18/app/build.gradle
+          grep -q 'MediaRouteButtonFactory' hb-v18/app/src/main/java/com/harvester/browser/NativePlayerActivity.java
+          grep -q 'CastPlayer.Builder' hb-v18/app/src/main/java/com/harvester/browser/PlaybackService.java
+      - name: Apply browser and VistaCast reliability upgrades
+        run: |
+          python3 harvester-browser/v2.1.0/upgrade-browser.py
+          python3 harvester-browser/v2.1.0/upgrade-player.py
+          grep -q "versionName '2.1.0'" hb-v18/app/build.gradle
+          grep -q 'auto_open_player_on_play' hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java
+          grep -q 'showQualitySelection' hb-v18/app/src/main/java/com/harvester/browser/NativePlayerActivity.java
+          grep -q 'Reproduzir no telemóvel' hb-v18/app/src/main/java/com/harvester/browser/NativePlayerActivity.java
+      - name: Apply per-tab navigation lock
+        run: |
+          python3 harvester-browser/v2.2.0/apply-page-lock.py
+          grep -q "versionName '2.2.0'" hb-v18/app/build.gradle
+          grep -q 'Bloquear saída da página atual' hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java
+          test -s hb-v18/app/src/main/assets/pagelock.js
+      - name: Verify page pin URL decisions
+        working-directory: hb-v18
+        run: |
+          mkdir -p /tmp/hb22-tests
+          javac -d /tmp/hb22-tests app/src/main/java/com/harvester/browser/core/PageNavigationLock.java core-tests/PageNavigationLockTests.java
+          java -cp /tmp/hb22-tests PageNavigationLockTests
+      - name: Eliminate reload loop and add bounded scan traffic protection
+        run: |
+          python3 harvester-browser/v2.3.0/safety-patch.py
+          grep -q "versionName '2.3.0'" hb-v18/app/build.gradle
+          grep -q 'HOST_PAUSE_MS' hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java
+          grep -q 'Recursos observados pelo WebView' hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java').read_text()
+          block=s.split('if(pageLockBlocks(tab,link)){',1)[1].split('tab.url=link;',1)[0]
+          assert 'w.loadUrl(target)' not in block, 'Detected obsolete navigation retry'
+          assert 'w.stopLoading()' in block
+          print('Navigation lock does not refetch blocked URL')
+          PY
+      - name: Enable official Vista Stream external player and metadata import
+        run: |
+          python3 harvester-browser/v2.4.0/bridge-vista.py
+          grep -q "versionName '2.4.0'" hb-v18/app/build.gradle
+          grep -q 'com.vistastream.tv.action.PLAY' hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java
+          grep -q 'com.vistastream.tv.action.IMPORT' hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java
+          grep -q 'Adicionar ao Vista Stream' hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java
+      - name: Apply explicit + import and save-on-confirmation
+        run: |
+          python3 harvester-browser/v2.5.0/curated-save.py
+          grep -q "versionName '2.5.0'" hb-v18/app/build.gradle
+          grep -q 'VISTA_IMPORT_REQUEST' hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java
+          grep -q 'Guardar vídeos: apenas pelo botão' hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java
+      - name: Forward page metadata to Vista Stream matcher
+        run: |
+          python3 harvester-browser/v2.6.0/improve-metadata-intent.py
+          grep -q "versionName '2.6.0'" hb-v18/app/build.gradle
+          grep -q 'yearFinder' hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java
+      - name: Add passive PT-BR subtitle/dubbing and episode hints
+        run: |
+          python3 harvester-browser/v2.7.0/forward-ptbr-metadata.py
+          grep -q "versionName '2.7.0'" hb-v18/app/build.gradle
+          grep -q 'com.vistastream.tv.extra.AUDIO_LANGUAGE' hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java
+      - name: Test PT-BR media labels with Java
+        working-directory: hb-v18
+        run: |
+          mkdir -p /tmp/hb-ptbr-tests
+          javac -d /tmp/hb-ptbr-tests \
+            app/src/main/java/com/harvester/browser/core/BrazilianMediaHints.java \
+            core-tests/BrazilianMediaHintsTests.java
+          java -cp /tmp/hb-ptbr-tests BrazilianMediaHintsTests
+      - name: Enhance Brazilian episode recognition and import safety
+        run: |
+          python3 harvester-browser/v2.8.0/upgrade.py
+          grep -q "versionName '2.8.0'" hb-v18/app/build.gradle
+          grep -q "BR_EPISODE" hb-v18/app/src/main/java/com/harvester/browser/core/BrazilianMediaHints.java
+      - name: Test Brazilian episode labels, v2.8
+        working-directory: hb-v18
+        run: |
+          mkdir -p /tmp/hb28-tests
+          javac -d /tmp/hb28-tests app/src/main/java/com/harvester/browser/core/BrazilianMediaHints.java core-tests/BrazilianMediaHintsTests.java ../harvester-browser/v2.8.0/BrazilianMediaHintsV28Tests.java
+          java -cp /tmp/hb28-tests BrazilianMediaHintsTests
+          java -cp /tmp/hb28-tests BrazilianMediaHintsV28Tests
+      - name: Fix explicit web bookmark import
+        run: |
+          python3 harvester-browser/v2.9.0/upgrade.py
+          grep -q "versionName '2.9.0'" hb-v18/app/build.gradle
+          grep -q 'Vista Stream.*import editor' hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java
+      - name: Inspect UI integration anchors
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java').read_text()
+          lines=s.splitlines()
+          for term in ('autoToggle(box', 'autoToggle(', 'menuHeading(box', 'recarregar', 'Recarregar', 'reload(', 'showMainMenu', 'showMenu', 'showBottom', 'refresh', 'botBar', 'bottom', 'setOnClickListener', 'public void onCreate'):
+              matches=[i for i,line in enumerate(lines) if term in line]
+              print('=== TERM',term,'COUNT',len(matches),'LINES',matches[:40])
+              for i in matches[:12]:
+                  print('\\n--- SNIPPET L',i+1,'---')
+                  print('\\n'.join(f'{j+1:4}: {lines[j]}' for j in range(max(0,i-5),min(len(lines),i+7))))
+          p=Path('hb-v18/app/src/main/AndroidManifest.xml')
+          print('=== MANIFEST ===')
+          print(p.read_text()[:7000])
+          print('=== RESOURCES ===')
+          for x in (Path('hb-v18/app/src/main/res/values/strings.xml'),Path('hb-v18/app/build.gradle')):
+              if x.exists():print(x, x.read_text()[:5000])
+          PY
+      - name: Rename and upgrade to VistaBrowser v3.0
+        run: |
+          python3 harvester-browser/v3.0.0/upgrade.py
+          cp harvester-browser/v3.0.0/VistaBrowserUpdates.java hb-v18/app/src/main/java/com/harvester/browser/VistaBrowserUpdates.java
+          grep -q "versionName '3.0.0'" hb-v18/app/build.gradle
+          grep -q 'android:label="VistaBrowser"' hb-v18/app/src/main/AndroidManifest.xml
+          grep -q 'private void showQuickActions' hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java
+          grep -q 'VistaBrowserUpdates.check(this,false)' hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java
+          ! grep -q 'navButton(nav,"⟳"' hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java
+      - name: Apply VistaBrowser premium-only UI v3.1
+        run: |
+          cp harvester-browser/v3.1.0/PremiumGlyph.java hb-v18/app/src/main/java/com/harvester/browser/ui/PremiumGlyph.java
+          python3 harvester-browser/v3.1.0/premium-ui.py
+          grep -q "versionName '3.1.0'" hb-v18/app/build.gradle
+          grep -q 'private void showQuickActions' hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java
+          grep -q 'private boolean sendToVistaStream' hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java
+          grep -q 'private void showDetected' hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java
+          grep -q 'PremiumGlyph.forSymbol' hb-v18/app/src/main/java/com/harvester/browser/ui/Styles.java
+      - name: Apply complete Opera-inspired interface v3.2
+        run: |
+          python3 harvester-browser/v3.2.0/opera-redesign.py
+          grep -q "versionName '3.2.0'" hb-v18/app/build.gradle
+          grep -q 'renderOperaTabs' hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java
+          grep -q 'addSpeedDial' hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java
+          grep -q 'privateOverviewMode' hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java
+      - name: Validate feature preservation and menu placement
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          src=Path('hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java').read_text()
+          quick=src.split('private void showQuickActions(){',1)[1].split('private void showMenu(){',1)[0]
+          main=src.split('private void showMenu(){',1)[1].split('private void toggleDesktop(){',1)[0]
+          assert 'Atualizar página' not in quick
+          assert main.count('Atualizar página')==1
+          assert 'menuHeading(box,"Navegação")' in main
+          assert 'this::showDetected' in main or 'this::showDetected' in quick
+          assert 'this::showInspector' in main or 'this::showInspector' in quick
+          assert 'this::showCrawler' in main
+          assert 'this::showLibrary' in main
+          assert 'this::showDownloads' in main
+          assert 'this::showAddresses' not in main or 'showAddresses("history")' in main
+          assert 'newTab(true,HOME)' in src
+          assert 'if(tab.privateMode!=privateOverviewMode)continue;' in src
+          for essential in ('private void startAutoAnalysis(', 'private void capturePage(', 'private boolean sendToVistaStream(', 'private void openNativePlayer(', 'private void showLibrary(', 'private void showCrawler(', 'private void showInspector(', 'private void showDetected(', 'private void showTabOverview('):
+              assert essential in src, 'Missing '+essential
+          for filepath in ('app/src/main/java/com/harvester/browser/core/MediaScanner.java','app/src/main/java/com/harvester/browser/data/Store.java','app/src/main/java/com/harvester/browser/NativePlayerActivity.java','app/src/main/java/com/harvester/browser/PlaybackService.java'):
+              assert Path('hb-v18',filepath).is_file(), 'Missing '+filepath
+          print('PASS: all browser capabilities retained and refresh moved into Navigation')
+          PY
+      - name: Install preset floral wallpaper (Unsplash)
+        run: |
+          mkdir -p hb-v18/app/src/main/res/drawable-nodpi
+          curl --fail --location --retry 4 --retry-delay 2 --connect-timeout 15 --max-time 90 \
+            -A 'VistaBrowser/3.3.0' \
+            'https://images.unsplash.com/photo-1628186902401-7a391c8ee16a?fit=crop&w=960&q=82&fm=jpg' \
+            --output hb-v18/app/src/main/res/drawable-nodpi/vb_flower.jpg
+          file hb-v18/app/src/main/res/drawable-nodpi/vb_flower.jpg | grep -q 'JPEG image data'
+          test "$(stat -c%s hb-v18/app/src/main/res/drawable-nodpi/vb_flower.jpg)" -gt 10000
+      - name: Generate the light-mode pastel floral wallpaper
+        run: |
+          python3 -m pip install -q --user Pillow
+          python3 harvester-browser/v4.1.0/make-light-wallpaper.py
+          file hb-v18/app/src/main/res/drawable-nodpi/vb_flower_light.jpg | grep -q 'JPEG image data'
+      - name: Apply VistaBrowser v3.3 navigation and themes
+        run: |
+          python3 harvester-browser/v3.3.0/upgrade.py
+          grep -q "versionName '3.3.0'" hb-v18/app/build.gradle
+          grep -q 'showSearchOverlay' hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java
+          grep -q 'showAppearance' hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java
+          grep -q 'case "profile":' hb-v18/app/src/main/java/com/harvester/browser/ui/PremiumGlyph.java
+      - name: Validate UI navigation and preserved services
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java').read_text()
+          for marker in (
+              'private void showDetected(){','private void showLibrary(){',
+              'private void showInspector(){','private void showCrawler(){',
+              'private boolean sendToVistaStream(','private void openNativePlayer(',
+              'private void onNativePlaybackRequested(','private void capturePage(',
+              'private void download(','private void setPageLockForCurrentTab(',
+              'VistaBrowserUpdates.check(this,false)','private void showQuickActions(){',
+              'private void showTabOverview(){','private void renderTabCards(',
+              'private void autoToggle(','private void showMenu(){',
+              'private void showAddresses(','private void renderOperaTabs(){',
+              'showSearchOverlay("")','private void showAppearance(){',
+          ):
+              assert marker in s, marker
+          assert 'menuEntry(box,"⟳","Atualizar página"' in s
+          assert 'navButton(bottomNav,"⟳"' in s
+          assert 'homeSearch.setOnClickListener(v->showSearchOverlay(""))' in s
+          assert 'wallpaperPicker.launch(new String[]{"image/*"})' in s
+          assert 'if(tab.privateMode!=privateOverviewMode)continue;' in s
+          print('PASS: navigation, fullscreen search, wallpaper options and core features')
+          PY
+      - name: Apply VistaBrowser 3.5 loading and technical controls
+        run: |
+          python3 harvester-browser/v3.4.0/upgrade.py
+          grep -q "versionName '3.4.0'" hb-v18/app/build.gradle
+          python3 harvester-browser/v3.5.0/upgrade.py
+          grep -q "versionName '3.5.0'" hb-v18/app/build.gradle
+      - name: Verify spinner and preserved settings
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java').read_text()
+          control=s.split('private void showQuickActions(){',1)[1].split('private void showAdvancedToolsMenu(){',1)[0]
+          profile=s.split('private void showMenu(){',1)[1].split('private void profileStatus(',1)[0]
+          assert 'private ProgressBar progressIndicator;' in s
+          assert 'new ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal)' in s
+          assert 'progressIndicator.setProgress(' in s
+          assert 'progressIndicator.setProgressTintList(' in s
+          assert 'progressIndicator.setText(' not in s
+          assert 'A carregar •' not in s
+          assert 'popup.showAtLocation(appFrame,Gravity.BOTTOM|Gravity.CENTER_HORIZONTAL,0,0);' in control
+          assert 'browserControls.setVisibility(View.INVISIBLE);' in control
+          assert 'popup.setOnDismissListener(' in control
+          for toggle in ('Bloquear saída da página atual','Abrir VistaStream ao iniciar um vídeo',
+                         'Analisar páginas automaticamente','Interações em domínios autorizados',
+                         'Bloquear pop-ups','Autorizar interações neste domínio'):
+              assert toggle in control,toggle
+          for unwanted in ('Todas as ferramentas','Inspetor web','Vídeos encontrados','Atualizar página','Partilhar página'):
+              assert unwanted not in control,unwanted
+          assert 'showAdvancedToolsMenu' in profile
+          for method in ('showDetected','showLibrary','showInspector','showCrawler',
+                         'openPlayerCastHub','showDownloads','showAddresses'):
+              assert method in profile,method
+          assert 'private boolean sendToVistaStream(' in s
+          assert 'private void openNativePlayer(' in s
+          assert 'private void showSearchOverlay(' in s
+          assert 'private void showAppearance(' in s
+          print('PASS VistaBrowser progress, technical toggles-only menu, protected bottom bar and feature entry points')
+          PY
+      - name: Apply VistaBrowser v3.6 integration and gesture fixes
+        run: |
+          python3 harvester-browser/v3.6.0/upgrade.py
+          grep -q "versionName '3.6.0'" hb-v18/app/build.gradle
+      - name: Verify VistaStream contract and functional UI bindings
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java').read_text()
+          manifest=Path('hb-v18/app/src/main/AndroidManifest.xml').read_text()
+          assert 'com.ivor.openstream.harvester.HarvesterPlaybackActivity' in s
+          assert 'com.ivor.openstream.harvester.HarvesterImportActivity' in s
+          assert 'VistaBrowserPlaybackActivity' not in s
+          assert 'VistaBrowserImportActivity' not in s
+          assert 'new String[]{"com.vistastream.tv","com.vistastream.tv.debug"}' in s
+          assert 'getActivityInfo(' in s
+          assert 'private void showVistaStreamConnection(){' in s
+          assert 'private void openVistaStreamHome(){' in s
+          assert 'availableVistaStreamPackage(false)!=null?' in s
+          assert 'com.vistastream.tv.action.PLAY' in s
+          assert 'com.vistastream.tv.action.IMPORT' in s
+          assert 'this::togglePopupProtection' in s
+          assert 'this::toggleAutoScanner' in s
+          assert 'this::showVistaStreamConnection' in s
+          assert 'getCurrentFocus()' in s and 'focus instanceof EditText' in s
+          assert 'getScrollY()==0' in s and 'popup.dismiss();' in s
+          assert 'grab.setOnTouchListener(' in s
+          assert 'android:name="com.vistastream.tv"' in manifest
+          assert 'android:name="com.vistastream.tv.debug"' in manifest
+          for method in ('showDetected(){','showLibrary(){','showInspector(){',
+              'showCrawler(){','openNativePlayer(','showQuickActions(){',
+              'showMenu(){','showSearchOverlay(','showAppearance(){',
+              'showAutoScanStatus(){','renderOperaTabs(){'):
+              assert method in s, method
+          print('PASS VistaStream exported contract, capability check, responsive status actions, keyboard and swipe')
+          PY
+      - name: Fix Home black screen and unify premium menus v3.7
+        run: |
+          python3 harvester-browser/v3.7.0/upgrade.py
+          grep -q "versionName '3.7.0'" hb-v18/app/build.gradle
+      - name: Test native Home navigation and unique feature access
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java').read_text()
+          menu=s.split('private void showMenu(){',1)[1].split('private void shareCurrentPage(){',1)[0]
+          assert 'private void showAdvancedToolsMenu(){' not in s
+          assert 'this::showAdvancedToolsMenu' not in s
+          assert 'private void goHome(){' in s
+          assert 'if(HOME.equals(link)){' in s
+          assert 'if(HOME.equals(tab.url))showHomepage();' in s
+          assert 'selected.web.stopLoading();' in s
+          assert 'selected.web.loadUrl(HOME);' in s
+          assert 'showHomepage();' in s
+          assert 'private class DismissibleSheetScroll extends ScrollView{' in s
+          assert s.count('new DismissibleSheetScroll(popup)')==2
+          assert 'moveSheet(target,travel);' in s
+          assert 'finishSheetDrag(target,travel);' in s
+          assert 'withEndAction(()->{decor.setTranslationY(0);popup.dismiss();})' in s
+          assert menu.count('Personalizar aparência')==1
+          assert menu.count('this::showVistaStreamConnection')==1
+          assert 'Ligar e abrir VistaStream' not in menu
+          assert 'Ferramentas avançadas' not in menu
+          assert menu.index('Explorar e reproduzir')<menu.index('PROTEÇÃO E REPRODUÇÃO')
+          for unique in ('this::showCrashDiagnostics','this::showAutoScanStatus',
+                         'this::openDemoPlayer','this::castCurrentPlayback',
+                         'this::showExportOptions','this::showCrawlExports',
+                         'this::toggleDesktop','this::confirmClearHistory',
+                         'this::shareCurrentPage','this::explainPageLock'):
+              assert unique in menu,unique
+          for core in ('private void showDetected(){','private void showLibrary(){',
+                       'private void showInspector(){','private void showCrawler(){',
+                       'private boolean sendToVistaStream(','private void openNativePlayer(',
+                       'private void showQuickActions(){','private void showTabOverview(){',
+                       'private void showAppearance(){','VistaBrowserUpdates.check(this,false)'):
+              assert core in s,core
+          print('PASS Home UI state, swipe-dismiss and deduplicated capabilities')
+          PY
+      - name: Build VistaBrowser v3.8 — contextual menus, appearance, tabs
+        run: |
+          python3 harvester-browser/v3.8.0/phase1-menus.py
+          python3 harvester-browser/v3.8.0/phase2-appearance.py
+          python3 harvester-browser/v3.8.0/phase3-tabs.py
+          python3 harvester-browser/v3.8.0/phase4-verify.py
+          grep -q "versionName '3.8.0'" hb-v18/app/build.gradle
+      - name: Validate v3.8 real functional UI and retained media integration
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java').read_text()
+          p=s.split('private void showPageActions(){',1)[1].split('private void menuDivider(',1)[0]
+          profile=s.split('private void showMenu(){',1)[1].split('private void shareCurrentPage(){',1)[0]
+          assert 'menu.setOnClickListener(v->{hideKeyboard();showPageActions();});' in s
+          assert 'settings.setOnClickListener(v->showHomeAppearance());' in s
+          for label in ('Atualizar','Partilhar','Adicionar aos favoritos',
+                'Adicionar acesso rápido','Nível de zoom','Modo desktop / móvel',
+                'Localizar na página','Traduzir página','Guardar como PDF',
+                'Obter instantâneo','Ecrã inteiro'):
+              assert label in p,label
+          assert 'private void showQuickActions(){' not in s
+          assert 'private void vbToggleCard(' in s
+          for action in ('Bloquear saída','Auto scanner','Pop-ups','VistaStream auto',
+                'Interações','Este domínio'):
+              assert action in profile,action
+          assert 'private void showHomeAppearance(){' in s
+          assert 'private void showAppearance(){' in s
+          assert 'themeCard(' in s and 'wallpaperOption(' in s
+          assert 'home_customization' in s and 'home_logo' in s
+          assert 'home_speed_dials' in s and 'theme_mode' in s
+          assert 'private void showTabActionMenu(){' in s
+          assert 'private void confirmCloseAllTabs(){' in s
+          assert 'private void confirmCloseSelectedTabs(){' in s
+          assert 'private void renderOperaTabs(){' in s
+          assert 'R.drawable.vb_flower' in s
+          assert 'private boolean sendToVistaStream(' in s
+          assert 'com.ivor.openstream.harvester.HarvesterPlaybackActivity' in s
+          assert 'com.ivor.openstream.harvester.HarvesterImportActivity' in s
+          for method in ('showDetected(){','showLibrary(){','showInspector(){',
+               'showCrawler(){','openNativePlayer(','showMenu(){',
+               'showTabOverview(){','showSearchOverlay(','showAutoScanStatus(){',
+               'showCrashDiagnostics(){','showExportOptions(){','showCrawlExports(){'):
+              assert method in s,method
+          print("PASS v3.8: no lost browser/video functions, all controls accessible")
+          PY
+      - name: Consolidate advanced diagnostics and export settings
+        run: |
+          python3 harvester-browser/v3.9.0/upgrade.py
+          grep -q "versionName '3.9.0'" hb-v18/app/build.gradle
+      - name: Verify advanced menu without duplicated commands
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java').read_text()
+          profile=s.split('private void showMenu(){',1)[1].split('private void showAdvancedBrowserSettings(){',1)[0]
+          advanced=s.split('private void showAdvancedBrowserSettings(){',1)[1].split('private void shareCurrentPage(){',1)[0]
+          assert 'Configurações avançadas' in profile
+          for label in ('Estado do Auto Player Scanner','Diagnóstico de falhas',
+                        'Testar player nativo','Transmitir vídeo atual para TV',
+                        'Exportar biblioteca','Exportar rastreio ZIP','Limpar histórico'):
+              assert label not in profile,label
+              assert label in advanced,label
+          for callback in ('showAutoScanStatus','showCrashDiagnostics','openDemoPlayer',
+                           'castCurrentPlayback','showExportOptions','showCrawlExports',
+                           'confirmClearHistory'):
+              assert callback in advanced,callback
+          for expected in ('showPageActions(){','renderOperaTabs(){','showAppearance(){',
+                           'showHomeAppearance(){','showMenu(){','sendToVistaStream(',
+                           'showLibrary(){','showInspector(){','showCrawler(){'):
+              assert expected in s,expected
+          assert 'private void showQuickActions(){' not in s
+          print('PASS advanced settings: seven unique tools, no duplicate main-menu rows')
+          PY
+      - name: Upgrade all native surfaces to dynamic themes
+        run: |
+          python3 harvester-browser/v4.0.0/phase1-theme-core.py
+          python3 harvester-browser/v4.0.0/phase2-light-surfaces.py
+          sed -i "s/versionName '3.9.0'/versionName '4.0.0'/; s/versionCode 30/versionCode 31/" hb-v18/app/build.gradle
+          grep -q "versionName '4.0.0'" hb-v18/app/build.gradle
+      - name: Theme coverage and feature regression checks
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          base=Path('hb-v18/app/src/main/java/com/harvester/browser')
+          s=(base/'MainActivity.java').read_text()
+          styles=(base/'ui/Styles.java').read_text()
+          assert 'public static void setTheme(boolean light)' in styles
+          assert 'public static int surface(int color)' in styles
+          assert 'public static int ink(int color)' in styles
+          assert 'public static int border(int color)' in styles
+          assert 'public static int accentInk()' in styles
+          assert 'v.setTextColor(ink(color))' in styles
+          assert 'new int[]{surface(top),surface(bottom)}' in styles
+          assert 'd.setColor(surface(color))' in styles
+          assert 'private void initializeThemePalette()' in s
+          assert 'initializeThemePalette();setupUi();' in s
+          assert 'private boolean browserLightMode()' in s
+          assert 'PANEL_BG=Styles.BG' in s
+          assert 'PANEL_TEXT=Styles.TEXT' in s
+          assert 'browserControls.setBackground(' in s
+          assert 'addressContainer.setBackground(' in s
+          assert 'if(lightHome)' in s
+          assert 'wallpaperStage.addView(translucentIvory' in s
+          assert 'Styles.LIGHT?0xFFECEADE' in s
+          assert 'lightHome?0xF8F8F6EF' in s
+          assert 'browserHost.removeAllViews()' in s
+          assert 'private void showAdvancedBrowserSettings()' in s
+          assert 'private void showMenu()' in s
+          assert 'private void showPageActions()' in s
+          assert 'private void showHomeAppearance()' in s
+          assert 'private void showAppearance()' in s
+          assert 'private void renderOperaTabs()' in s
+          assert 'private void showSearchOverlay(' in s
+          assert 'private boolean sendToVistaStream(' in s
+          assert 'com.ivor.openstream.harvester.HarvesterPlaybackActivity' in s
+          assert 'com.ivor.openstream.harvester.HarvesterImportActivity' in s
+          for feature in ('showDetected(){','showLibrary(){','showInspector(){',
+                 'showCrawler(){','openNativePlayer(','showAutoScanStatus(){',
+                 'showCrashDiagnostics(){','showExportOptions(){','showCrawlExports(){'):
+              assert feature in s,feature
+          assert "versionCode 31" in Path('hb-v18/app/build.gradle').read_text()
+          print('PASS dynamic light/dark palette, main UI surfaces, browser features and integration')
+          PY
+      - name: Apply VistaBrowser v4.1 theme and favicon improvements
+        run: |
+          python3 harvester-browser/v4.1.0/upgrade.py
+          grep -q "versionName '4.1.0'" hb-v18/app/build.gradle
+      - name: Verify light and dark Home, accent themes and real favicons
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          root=Path('hb-v18/app/src/main/java/com/harvester/browser')
+          src=(root/'MainActivity.java').read_text()
+          styles=(root/'ui/Styles.java').read_text()
+          assert 'public static void setTheme(boolean light)' in styles
+          assert 'public static int accentInk()' in styles
+          assert 'int[] colors=LIGHT?new int[]{accent,0xFFC8C9BE}' in styles
+          assert 'int columns=5;' in src
+          assert 'private void loadSpeedDialFavicon(' in src
+          assert 'www.google.com/s2/favicons?domain=' in src
+          assert 'vbFaviconCache' in src and 'vbFaviconExecutor' in src
+          assert 'Styles.LIGHT?' in src
+          assert 'R.drawable.vb_flower_light' in src
+          assert 'Styles.LIGHT?0x18FFF9ED' not in src # conditional gradient syntax uses line break
+          assert '0x18FFF9ED' in src and '0x46F2E7D6' in src
+          assert 'if(selected!=null && HOME.equals(selected.url))showHomepage();' in src
+          assert 'Styles.ink(Styles.ACCENT)' in src
+          assert 'bottomTabsCounter.setBackground(Styles.stroke(this,0x00272727,8,Styles.ACCENT))' in src
+          assert 'Math.max(a,225)' in styles
+          assert 'private void showMenu()' in src
+          assert 'private void showPageActions()' in src
+          assert 'private void renderOperaTabs()' in src
+          assert 'private void showAdvancedBrowserSettings()' in src
+          assert 'private boolean sendToVistaStream(' in src
+          assert 'private void showDetected()' in src
+          assert 'private void showLibrary()' in src
+          assert 'private void showInspector()' in src
+          assert 'private void showCrawler()' in src
+          assert (Path('hb-v18/app/src/main/res/drawable-nodpi/vb_flower_light.jpg').stat().st_size)>10000
+          print('PASS v4.1: full theme repaint, warm Home, accent coverage, favicons, scanner and VistaStream preserved')
+          PY
+      - name: Vendor the complete Simples Scraper 3.0.1 source tree
+        run: |
+          git fetch --depth=1 origin refs/tags/simples-scraper-v3.0.1:refs/tags/simples-scraper-v3.0.1
+          mkdir -p /tmp/simples-scraper-3.0.1
+          git archive simples-scraper-v3.0.1 video-harvester-android/app/src/main/java/com/yure/videoharvester | tar -x -C /tmp/simples-scraper-3.0.1
+          mkdir -p hb-v18/app/src/main/java/com/yure/videoharvester
+          cp /tmp/simples-scraper-3.0.1/video-harvester-android/app/src/main/java/com/yure/videoharvester/*.java hb-v18/app/src/main/java/com/yure/videoharvester/
+          cp harvester-browser/v4.2.0/VistaScraperActivity.java hb-v18/app/src/main/java/com/yure/videoharvester/
+          test "$(find hb-v18/app/src/main/java/com/yure/videoharvester -maxdepth 1 -type f -name '*.java' | wc -l)" -ge 25
+      - name: Add unified Crawler hub and preserve full Simples Scraper engine
+        run: |
+          python3 harvester-browser/v4.2.0/install-scraper.py
+          grep -q "versionName '4.2.0'" hb-v18/app/build.gradle
+      - name: Apply complete premium palette across all scraper screens
+        run: |
+          python3 harvester-browser/v4.2.1/finish-premium.py
+          grep -q "versionName '4.2.1'" hb-v18/app/build.gradle
+      - name: Redesign all Crawler screens and implement reviewed video saving
+        run: |
+          python3 harvester-browser/v4.3.0/upgrade.py
+          grep -q "versionName '4.3.0'" hb-v18/app/build.gradle
+      - name: Fix scanner layout and cross-app import receipts
+        run: |
+          python3 harvester-browser/v4.3.1/upgrade.py
+          grep -q "versionName '4.3.1'" hb-v18/app/build.gradle
+      - name: Repair race between Android canceled result and confirmed saved receipt
+        run: |
+          python3 harvester-browser/v4.3.2/fix-import-return.py
+          grep -q "versionName '4.3.2'" hb-v18/app/build.gradle
+      - name: Replace capture result with metadata review and catalog-link import
+        run: |
+          python3 harvester-browser/v4.3.3/upgrade.py
+          grep -q "versionName '4.3.3'" hb-v18/app/build.gradle
+      - name: Verify inspected video is never marked saved until VistaStream confirms
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('hb-v18/app/src/main/java/com/yure/videoharvester/VistaPremiumInspectorActivity.java')
+          s=p.read_text()
+          assert '@Override void captureForVideos()' in s
+          assert 'void openVistaEditor(' in s
+          assert 'com.vistastream.tv.action.IMPORT' in s
+          assert 'BrTitleParser.parse(rawTitle)' in s
+          assert 'BrazilianMediaHints.infer' in s
+          assert 'com.vistastream.tv.extra.CATALOG_LINKED' in s
+          assert 'finishConfirmedImport(RESULT_OK,receipt)' in s
+          assert 'mediaUrl",transientSource?"":importUrl' in s
+          assert 'importPending=false;importCompleted=true' in s
+          assert "versionCode 38" in Path('hb-v18/app/build.gradle').read_text()
+          print('PASS inspector capture -> metadata -> catalog-linked VistaStream editor; no save before confirmation')
+          PY
+      - name: Verify resilient return path and temporary media acknowledgment
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path("hb-v18/app/src/main/java")
+          main=(p/"com/harvester/browser/MainActivity.java").read_text()
+          scanner=(p/"com/yure/videoharvester/VistaScraperPremiumActivity.java").read_text()
+          for text in (main,scanner):
+              assert '1700' in text
+              assert 'SAVED_TEMPORARY' in text
+              assert 'android.util.Log.e' in text
+              assert 'CONFIRMATION_RECEIVER' in text
+          assert "versionCode 38" in Path("hb-v18/app/build.gradle").read_text()
+          print("PASS asynchronous cross-app result racing, local crash guards and HLS temporary media receipt")
+          PY
+      - name: Test stable scanner header and direct Chromecast player routing
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          main=Path('hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java').read_text()
+          premium=Path('hb-v18/app/src/main/java/com/yure/videoharvester/VistaScraperPremiumActivity.java').read_text()
+          assert 'CONFIRMATION_RECEIVER' in main and 'CONFIRMATION_RECEIVER' in premium
+          assert 'SAVED_WEB_ONLY' in main and 'SAVED_WEB_ONLY' in premium
+          assert 'private void playSourceInVista(Catalog item)' in premium
+          assert 'HarvesterPlaybackActivity' in premium
+          assert 'toolbar21.setLayoutParams(new LinearLayout.LayoutParams(-1,dp(84)))' in premium
+          assert 'titleGroup.addView(screenTitle,new LinearLayout.LayoutParams(-1,dp(39)))' in premium
+          assert 'versionCode 38' in Path('hb-v18/app/build.gradle').read_text()
+          print('PASS fixed header sizing, transient VistaStream playback, explicit import receipts')
+          PY
+      - name: Verify media workflow and preservation of scraper engine
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          root=Path("hb-v18/app/src/main/java/com/yure/videoharvester")
+          text=(root/"VistaScraperPremiumActivity.java").read_text()
+          assert "void createScanPage()" in text
+          assert "void createIframePage()" in text
+          assert "void renderVideos()" in text
+          assert "void renderLibrary()" in text
+          assert "void createSettingsPage()" in text
+          assert "void buildPremiumToolbar()" in text
+          assert "void buildPremiumDock()" in text
+          assert "void showMediaWorkflow(Catalog item)" in text
+          assert "HarvesterVistaBridge.isShareable" in text
+          assert "com.vistastream.tv.action.IMPORT" in text
+          assert 'getSharedPreferences("vh25_playback_tests",0)' in text
+          assert "MediaStore.Video.Media.IS_PENDING" in text
+          assert "RELATIVE_PATH" in text
+          assert "void startVistaImport" in text
+          assert 'if(!expected.equals(response))' in text
+          assert "private final ExecutorService galleryIo" in text
+          assert (root/"VistaPremiumInspectorActivity.java").exists()
+          manifest=Path("hb-v18/app/src/main/AndroidManifest.xml").read_text()
+          assert "VistaScraperPremiumActivity" in manifest
+          assert "VistaPremiumInspectorActivity" in manifest
+          vb=Path("hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java").read_text()
+          assert "VistaScraperPremiumActivity.class" in vb
+          assert "private void showDomainCrawlerLegacy(){" in vb
+          assert "private boolean sendToVistaStream(" in vb
+          assert "private void showLibrary(){" in vb
+          assert "private void renderOperaTabs(){" in vb
+          assert "versionCode 38" in Path("hb-v18/app/build.gradle").read_text()
+          print("PASS new native premium UI, reviewed import, gallery and original crawler/VS workflows")
+          PY
+      - name: Verify secondary source displays follow VistaBrowser themes
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('hb-v18/app/src/main/java/com/yure/videoharvester')
+          styles='com.harvester.browser.ui.Styles'
+          for name in ['BrCatalogActivity','PlayerInspectorActivity',
+                       'PlayerInspectorActivityV26','PlayerInspectorActivityV27',
+                       'PlayerInspectorActivityV28','PlaybackTestActivity']:
+              s=(p/(name+'.java')).read_text()
+              assert styles in s,name
+              assert '0xff421323' not in s,name
+              assert '0xff651F36' not in s,name
+          assert "versionCode 38" in Path('hb-v18/app/build.gradle').read_text()
+          assert (p/'VistaScraperActivity.java').exists()
+          assert (p/'VistaScraperPremiumActivity.java').exists()
+          print('PASS all native Simples Scraper screens use VistaBrowser light/dark theme and custom accent')
+          PY
+      - name: Test complete embedded scraper functionality and VistaBrowser regression
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          app=Path('hb-v18/app/src/main')
+          base=app/'java/com/yure/videoharvester'
+          vb=(app/'java/com/harvester/browser/MainActivity.java').read_text()
+          manifest=(app/'AndroidManifest.xml').read_text()
+          gradle=Path('hb-v18/app/build.gradle').read_text()
+          assert 'private void showCrawler(){' in vb
+          assert 'private void showDomainCrawlerLegacy(){' in vb
+          for name in ('MainActivity','MainActivityV12','MainActivityV13','MainActivityV14',
+                       'MainActivityV15','MainActivityV16','MainActivityV17','MainActivityV18',
+                       'MainActivityV19','MainActivityV20','MainActivityV21','MainActivityV22',
+                       'MainActivityV24','MainActivityV25','PlayerInspectorActivityV28',
+                       'BrCatalogEngine','BrTitleParser','BrCatalogActivity',
+                       'HarvesterVistaBridge','ScanNotificationService',
+                       'PlaybackTestActivity','VistaScraperActivity'):
+              assert (base/(name+'.java')).exists(),name
+          assert 'org.jsoup:jsoup:1.18.3' in gradle
+          assert "versionCode 38" in gradle
+          for name in ('VistaScraperPremiumActivity','PlayerInspectorActivityV28',
+                       'BrCatalogActivity','PlaybackTestActivity','ScanNotificationService'):
+              assert 'com.yure.videoharvester.'+name in manifest,name
+          for label in ('Scan completo de websites','Análise de iframes',
+                        'Descobertas e players','Vídeos encontrados',
+                        'Biblioteca do scanner','Catálogo de fontes BR',
+                        'Configurações e backups do scanner','Crawler técnico do VistaBrowser'):
+              assert label in vb,label
+          for core in ('showMenu(){','showPageActions(){','showLibrary(){',
+                       'showDetected(){','showInspector(){','showCrawlExports(){',
+                       'showAutoScanStatus(){','sendToVistaStream(',
+                       'showAppearance(){','renderOperaTabs(){'):
+              assert core in vb,core
+          print('PASS full source and navigation coverage for embedded Simples Scraper')
+          PY
+      - name: Apply v4.3.4 URL intelligence without changing capture behavior
+        run: |
+          python3 harvester-browser/v4.3.4/upgrade.py
+          grep -q "versionName '4.3.4'" hb-v18/app/build.gradle
+          grep -q "versionCode 39" hb-v18/app/build.gradle
+          grep -q 'com.vistastream.tv.extra.YEAR' hb-v18/app/src/main/java/com/yure/videoharvester/VistaPremiumInspectorActivity.java
+          grep -q 'VistaMetadataHints.inspect' hb-v18/app/src/main/java/com/yure/videoharvester/VistaPremiumInspectorActivity.java
+      - name: Test PT-BR URL and title cleaning
+        working-directory: hb-v18
+        run: |
+          mkdir -p /tmp/vb434-tests
+          javac -encoding UTF-8 -d /tmp/vb434-tests \
+            app/src/main/java/com/yure/videoharvester/VistaMetadataHints.java \
+            ../harvester-browser/v4.3.4/VistaMetadataHintsTests.java
+          java -cp /tmp/vb434-tests com.yure.videoharvester.VistaMetadataHintsTests
+      - name: Add optional Vista ID local link, retaining browser history and sources
+        run: |
+          python3 harvester-browser/v4.3.5/upgrade.py
+          grep -q "versionName '4.3.5'" hb-v18/app/build.gradle
+          grep -q 'VistaIdAccountActivity' hb-v18/app/src/main/AndroidManifest.xml
+      - name: Add Android TV landscape support
+        run: |
+          python3 harvester-browser/v4.3.6/tv_mode.py
+          grep -q "versionName '4.3.6'" hb-v18/app/build.gradle
+          grep -q 'LEANBACK_LAUNCHER' hb-v18/app/src/main/AndroidManifest.xml
+
+      - name: Add Vista Source and passive iframe inspection
+        run: |
+          python3 harvester-browser/v4.3.7/upgrade.py
+          grep -q "versionName '4.3.7'" hb-v18/app/build.gradle
+          grep -q "VistaSourceCollector.scan" hb-v18/app/src/main/java/com/yure/videoharvester/VistaPremiumInspectorActivity.java
+          grep -q "VistaSourceBrowserActivity" hb-v18/app/src/main/AndroidManifest.xml
+          grep -q "openVistaSource" hb-v18/app/src/main/java/com/harvester/browser/MainActivity.java
+      - name: Enable HTML5 Smart Crawler and stable signing support
+        run: |
+          python3 harvester-browser/v4.3.8/upgrade.py
+          grep -q "versionName '4.3.8'" hb-v18/app/build.gradle
+          grep -q 'Smart Crawler · Configurar e ver resultados' hb-v18/app/src/main/java/com/yure/videoharvester/VistaScraperPremiumActivity.java
+          grep -q 'VistaPlayerAssistant.attempt' hb-v18/app/src/main/java/com/yure/videoharvester/VistaPremiumInspectorActivity.java
+      - name: Add guarded player interaction engine
+        run: |
+          python3 harvester-browser/v4.3.9/upgrade.py
+          grep -q "versionName '4.3.9'" hb-v18/app/build.gradle
+          grep -q "VistaPlayInteractor.attempt" hb-v18/app/src/main/java/com/yure/videoharvester/VistaPremiumInspectorActivity.java
+      - name: Audit iframe queue integration anchors
+        run: |
+          grep -nE 'void (startIframe|runIframe|openIframe|loadIframe|scanIframe|inspectIframe)|iframePreview|iframeWebView|iframeQueue|iframePages' hb-v18/app/src/main/java/com/yure/videoharvester/MainActivityV*.java | head -110 || true
+      - name: Integrate automation into the real iframe scan queue
+        run: |
+          python3 harvester-browser/v4.4.0/upgrade.py
+          grep -q "versionName '4.4.0'" hb-v18/app/build.gradle
+          grep -q "performVistaIframeAssist" hb-v18/app/src/main/java/com/yure/videoharvester/VistaScraperPremiumActivity.java
+          grep -q 'VistaSourceCollector.scan(this,view,slugTitle(parentPage),parentPage)' hb-v18/app/src/main/java/com/yure/videoharvester/VistaScraperPremiumActivity.java
+      # Match VistaStream: refuse to build or publish with a temporary debug key.
+      - name: Require stable VistaBrowser signing (no debug-key fallback)
+        shell: bash
+        env:
+          VB_KEYSTORE_BASE64: ${{ secrets.VB_KEYSTORE_BASE64 }}
+          VB_KEYSTORE_PASSWORD: ${{ secrets.VB_KEYSTORE_PASSWORD }}
+          VB_KEY_ALIAS: ${{ secrets.VB_KEY_ALIAS }}
+          VB_KEY_PASSWORD: ${{ secrets.VB_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for name in VB_KEYSTORE_BASE64 VB_KEYSTORE_PASSWORD VB_KEY_ALIAS VB_KEY_PASSWORD; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "::error::Missing required private Actions secret: $name. Refusing to publish a debug-signed APK."
+              exit 1
+            fi
+          done
+          printf '%s' "$VB_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/vistabrowser-signing.jks"
+          chmod 600 "$RUNNER_TEMP/vistabrowser-signing.jks"
+          keytool -list -keystore "$RUNNER_TEMP/vistabrowser-signing.jks" \
+            -storepass "$VB_KEYSTORE_PASSWORD" -alias "$VB_KEY_ALIAS" > /dev/null
+          EXPECTED_CERT_SHA256="$(keytool -exportcert -keystore "$RUNNER_TEMP/vistabrowser-signing.jks" \
+            -storepass "$VB_KEYSTORE_PASSWORD" -alias "$VB_KEY_ALIAS" | sha256sum | awk '{print $1}')"
+          {
+            echo "VISTABROWSER_KEYSTORE_PATH=$RUNNER_TEMP/vistabrowser-signing.jks"
+            echo "VISTABROWSER_KEYSTORE_PASSWORD=$VB_KEYSTORE_PASSWORD"
+            echo "VISTABROWSER_KEY_ALIAS=$VB_KEY_ALIAS"
+            echo "VISTABROWSER_KEY_PASSWORD=$VB_KEY_PASSWORD"
+            echo "EXPECTED_CERT_SHA256=$EXPECTED_CERT_SHA256"
+          } >> "$GITHUB_ENV"
+          echo "Persistent signing configured; expected public cert fingerprint: $EXPECTED_CERT_SHA256"
+      - name: Install Android SDK
+        run: |
+          echo "ANDROID_HOME=${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}" >> "$GITHUB_ENV"
+          SDKMANAGER=$(find /usr/local/lib/android/sdk -type f -name sdkmanager -print -quit)
+          test -n "$SDKMANAGER"
+          echo "SDKMANAGER=$SDKMANAGER" >> "$GITHUB_ENV"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" 'platforms;android-36' 'build-tools;36.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.6.0'
+      - name: Test extraction engine and Cast eligibility
+        working-directory: hb-v18
+        run: |
+          mkdir -p /tmp/hb18-tests
+          javac -d /tmp/hb18-tests app/src/main/java/com/harvester/browser/core/*.java core-tests/CoreTests.java
+          java -cp /tmp/hb18-tests CoreTests
+      - name: Update VistaBrowser release version
+        run: |
+          python3 harvester-browser/v4.4.1/upgrade.py
+          grep -q "versionName '4.4.1'" hb-v18/app/build.gradle
+          grep -q "versionCode 46" hb-v18/app/build.gradle
+      - name: Compile Android APK
+        working-directory: hb-v18
+        run: gradle :app:assembleDebug --stacktrace --no-daemon
+      - name: Stage APK
+        run: |
+          test -s hb-v18/app/build/outputs/apk/debug/app-debug.apk
+          cp hb-v18/app/build/outputs/apk/debug/app-debug.apk VistaBrowser-v4.4.1.apk
+          sha256sum VistaBrowser-v4.4.1.apk
+      - name: Verify permanent signing certificate on the exact APK being published
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="VistaBrowser-v4.4.1.apk"
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs "$APK"
+          ACTUAL_CERT_SHA256="$("$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs "$APK" \
+            | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -1)"
+          test -n "$ACTUAL_CERT_SHA256" || { echo "::error::No certificate fingerprint in APK"; exit 1; }
+          if [[ "${ACTUAL_CERT_SHA256,,}" != "${EXPECTED_CERT_SHA256,,}" ]]; then
+            echo "::error::APK is signed with a different certificate; release blocked"
+            exit 1
+          fi
+          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$APK" | head -n 1 | grep "versionCode='46'"
+          echo "APK signature and monotonic versionCode verified."
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VistaBrowser-v4.4.1
+          path: VistaBrowser-v4.4.1.apk
+          if-no-files-found: error
+      - name: Publish VistaBrowser v4.4.1 release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: vistabrowser-v4.4.1
+          target_commitish: ${{ github.sha }}
+          name: "VistaBrowser v4.4.1 — Assinatura permanente e atualizador OTA"
+          body: |
+            VistaBrowser v4.4.1 — Primeira versão assinada com certificado permanente protegido nos GitHub Actions Secrets. Versões futuras usarão exatamente o mesmo certificado.
+            Mantém Smart Crawler 4.4.0: análise de iframes, tentativa limitada de reprodução e Vista Source. Inclui atualizador pelo próprio app com instalação confirmada pelo Android.
+            IMPORTANTE: Se a versão anterior foi instalada com outro certificado debug, o Android não pode atualizar por cima. Exporta e valida o backup antes de desinstalar uma única vez; preserva sempre a chave privada desta release em cópias seguras.
+            Esta release só é publicada quando a assinatura e o certificado forem verificados no APK final.
+          prerelease: false
+          files: VistaBrowser-v4.4.1.apk
