@@ -1,4 +1,5 @@
 name: Publish VistaBrowser 4.4.2 using VistaStream-signed APK
+# Publication may proceed only after the protected signer creates its verified staging APK.
 on:
   push:
     branches: [feature/vistabrowser-v442-integrated-queue]
