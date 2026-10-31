@@ -808,15 +808,11 @@ jobs:
           mkdir -p /tmp/hb18-tests
           javac -d /tmp/hb18-tests app/src/main/java/com/harvester/browser/core/*.java core-tests/CoreTests.java
           java -cp /tmp/hb18-tests CoreTests
-      - name: Update VistaBrowser release version
-        run: |
-          python3 harvester-browser/v4.4.2/upgrade.py
-          grep -q "versionName '4.4.2'" hb-v18/app/build.gradle
-          grep -q "versionCode 46" hb-v18/app/build.gradle
       - name: Integrate Smart Crawler into iframe preview and persist progress
         run: |
           python3 harvester-browser/v4.4.2/upgrade.py
           grep -q "versionName '4.4.2'" hb-v18/app/build.gradle
+          grep -q "versionCode 47" hb-v18/app/build.gradle
           grep -q "VistaSourceCollector.scan(this,view,slugTitle(parentPage),parentPage," hb-v18/app/src/main/java/com/yure/videoharvester/VistaScraperPremiumActivity.java
           grep -q "toggleCrawler442" hb-v18/app/src/main/java/com/yure/videoharvester/VistaScraperPremiumActivity.java
       - name: Compile Android APK
