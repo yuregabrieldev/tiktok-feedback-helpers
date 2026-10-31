@@ -38,6 +38,13 @@ extra='''    /**
             scanSerial!=sequence||runMode!=2||view==null)return;
         if(!getSharedPreferences("vista_smart_crawler_v1",0)
             .getBoolean("enabled",false))return;
+        // Do not interact with an ad after navigation to another host.
+        try {
+            android.net.Uri expected=android.net.Uri.parse(task.url);
+            android.net.Uri actual=android.net.Uri.parse(view.getUrl());
+            if(expected.getHost()!=null && actual.getHost()!=null &&
+               !expected.getHost().equalsIgnoreCase(actual.getHost()))return;
+        }catch(Exception ignored){return;}
         VistaPlayerAssistant.attempt(this,view);
         VistaPlayInteractor.attempt(this,view);
         VistaSourceCollector.scan(this,view);
