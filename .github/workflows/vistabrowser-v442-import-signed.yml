@@ -1,0 +1,72 @@
+name: Publish VistaBrowser 4.4.2 using VistaStream-signed APK
+# Publication may proceed only after the protected signer creates its verified staging APK.
+on:
+  push:
+    branches: [feature/vistabrowser-v442-integrated-queue]
+    paths:
+      - .github/workflows/vistabrowser-v442-import-signed.yml
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download VistaBrowser APK already signed with protected VistaStream key
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          STAGE_TAG="vistabrowser-v4.4.2-signed-staging"
+          for i in $(seq 1 40); do
+            if gh release view "$STAGE_TAG" --repo yuregabriell/Vista-Stream-TV >/dev/null 2>&1; then break; fi
+            echo "Signed staging not present yet ($i/40)"
+            sleep 15
+          done
+          gh release download "$STAGE_TAG" --repo yuregabriell/Vista-Stream-TV \
+            --pattern 'VistaBrowser-v4.4.2.apk' --dir .
+          test -s VistaBrowser-v4.4.2.apk
+          echo "Downloaded signed VistaBrowser APK from existing VistaStream signing job."
+      - name: Download public VistaStream reference signature
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release download v0.17.2-build.279 --repo yuregabriell/Vista-Stream-TV \
+            --pattern 'VistaStream-279.apk' --dir /tmp
+          test -s /tmp/VistaStream-279.apk
+      - name: Verify exact certificate and APK identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "ANDROID_HOME=${ANDROID_HOME:-/usr/local/lib/android/sdk}" >> "$GITHUB_ENV"
+          SDKMANAGER="$(find /usr/local/lib/android/sdk -type f -name sdkmanager -print -quit)"
+          "$SDKMANAGER" 'build-tools;36.0.0' >/dev/null
+          SIGNER="${ANDROID_HOME:-/usr/local/lib/android/sdk}/build-tools/36.0.0/apksigner"
+          AAPT="${ANDROID_HOME:-/usr/local/lib/android/sdk}/build-tools/36.0.0/aapt"
+          "$SIGNER" verify --verbose VistaBrowser-v4.4.2.apk
+          "$SIGNER" verify --verbose /tmp/VistaStream-279.apk
+          CERT_VB="$("$SIGNER" verify --print-certs VistaBrowser-v4.4.2.apk | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -1)"
+          CERT_VS="$("$SIGNER" verify --print-certs /tmp/VistaStream-279.apk | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -1)"
+          test -n "$CERT_VB" && test "$CERT_VB" = "$CERT_VS" || {
+            echo "::error::VistaBrowser APK is NOT signed with the same stable certificate as VistaStream"
+            exit 1
+          }
+          BADGING="$("$AAPT" dump badging VistaBrowser-v4.4.2.apk | head -n 1)"
+          echo "$BADGING" | grep -q "versionName='4.4.2'"
+          echo "$BADGING" | grep -q "versionCode='47'"
+          echo "Signer SHA-256 matches the permanent VistaStream signing key."
+          sha256sum VistaBrowser-v4.4.2.apk
+      - name: Publish normal VistaBrowser release for the in-app updater
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release create vistabrowser-v4.4.2 VistaBrowser-v4.4.2.apk \
+            --target "$GITHUB_SHA" \
+            --title "VistaBrowser 4.4.2 — Smart Crawler integrado e progresso persistente" \
+            --notes "VistaBrowser 4.4.2: Smart Crawler integrado na própria prévia da análise de iframes, controlos de Play seguros, um único botão Pausar/Retomar e estado persistente dos iframes com vídeo capturado. APK assinado pelo certificado PERMANENTE atualmente utilizado nas releases VistaStream. O certificado é partilhado entre apps, com o risco adicional de chave comum, mas a chave privada permanece apenas nos Actions Secrets do VistaStream; não é copiada para o repo público VistaBrowser. A mesma chave deverá assinar as próximas versões através do workflow central. Vista Source incluído e ligado à fila. Como versões anteriores tinham uma assinatura debug temporária, talvez seja necessária UMA reinstalação com backup da biblioteca, favoritos e histórico antes de futuras atualizações sem perda de dados. A aplicação pede autorização normal do Android para instalar atualizações." \
+            --latest
