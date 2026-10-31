@@ -776,5 +776,9 @@ jobs:
           grep -nE 'void (start|stop|pause|resume|next|inspect|finish|process|refresh|load)|class Task|class FrameState|WebView web|void inspectDom|observations|runMode|scanning|scanSerial|current=|onPageFinished' hb-v18/app/src/main/java/com/yure/videoharvester/MainActivityV{18,19,20,21}.java | head -260 || true
           echo "=== MainActivityV21 core ==="
           sed -n '1,560p' hb-v18/app/src/main/java/com/yure/videoharvester/MainActivityV21.java
+          echo "=== MainActivityV19 automatic task lifecycle ==="
+          sed -n '175,287p' hb-v18/app/src/main/java/com/yure/videoharvester/MainActivityV19.java
+          echo "=== MainActivityV18 task queue lifecycle ==="
+          sed -n '192,270p' hb-v18/app/src/main/java/com/yure/videoharvester/MainActivityV18.java
           echo "=== MainActivityV22 core ==="
           sed -n '1,370p' hb-v18/app/src/main/java/com/yure/videoharvester/MainActivityV22.java
