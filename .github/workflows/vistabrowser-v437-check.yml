@@ -771,4 +771,16 @@ jobs:
           name: VistaBrowser-v4.3.7
           path: VistaBrowser-v4.3.7.apk
           if-no-files-found: error
-      # Validation build only; do not publish an APK until signing is stable.
+      - name: Publish VistaBrowser v4.3.7 release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: vistabrowser-v4.3.7
+          target_commitish: ${{ github.sha }}
+          name: "VistaBrowser v4.3.7 — Smart Crawler e Vista Source"
+          body: |
+            VistaBrowser 4.3.7: descobre vídeos HTML5 e iframes acessíveis no inspetor (opção ativável), mantém uma lista para revisão e exporta manifest.json em formato Vista Source. Pode enviá-lo diretamente ao VistaStream compatível para importação confirmada.
+            Melhorias no atualizador interno: retoma APK descarregado após voltar à aplicação.
+            Ainda não automatiza todos os pop-ups, não contorna DRM/captcha, não garante identificar filmes sem intervenção.
+            ATENÇÃO: APK de teste com assinatura debug da build GitHub Actions. Se a assinatura diferir da versão instalada, o Android não permitirá atualizar por cima. Guarda os dados antes de reinstalar; não desinstales sem backup.
+          files: VistaBrowser-v4.3.7.apk
+          prerelease: false
