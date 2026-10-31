@@ -50,6 +50,34 @@ if old in data:
     data=data.replace(old,'''            "Analisa cada iframe, tenta abrir botões Play identificáveis e procura URLs de mídia. " +
             "Os resultados ainda podem exigir revisão quando o player impõe restrições.");''',1)
 premium.write_text(data,encoding="utf-8")
+# Preserve the parent title and page URL when collecting sources from a generic iframe.
+collector=src/"VistaSourceCollector.java"
+code=collector.read_text(encoding="utf-8")
+needle="    public static void scan(Activity activity, WebView browser) {"
+assert code.count(needle)==1
+code=code.replace(needle,'''    public static void scan(Activity activity, WebView browser) {
+        scan(activity,browser,null,null);
+    }
+
+    public static void scan(Activity activity, WebView browser,
+                            String hintTitle,String parentPage) {''',1)
+needle='''                String title = data.optString("title", "").trim();
+                String page = stripQuery(data.optString("page", ""));'''
+assert code.count(needle)==1
+code=code.replace(needle,'''                String title = data.optString("title", "").trim();
+                if(hintTitle!=null && !hintTitle.trim().isEmpty() &&
+                   hintTitle.length()<=180) title=hintTitle.trim();
+                String page = stripQuery(parentPage!=null && !parentPage.isEmpty()
+                    ?parentPage:data.optString("page", ""));''',1)
+collector.write_text(code,encoding="utf-8")
+
+code=premium.read_text(encoding="utf-8")
+needle="        VistaSourceCollector.scan(this,view);"
+assert code.count(needle)==1
+code=code.replace(needle,'''        String parentPage=originPage(task.url);
+        VistaSourceCollector.scan(this,view,slugTitle(parentPage),parentPage);''',1)
+premium.write_text(code,encoding="utf-8")
+
 g=gradle.read_text(encoding="utf-8")
 assert "versionName '4.3.9'" in g and "versionCode 44" in g
 g=g.replace("versionName '4.3.9'","versionName '4.4.0'",1)
