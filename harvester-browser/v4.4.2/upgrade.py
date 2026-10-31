@@ -87,6 +87,38 @@ methods='''    // One durable source of truth: a media URL only counts as captur
         getSharedPreferences(crawlerPrefs442,0).edit().putBoolean(name,enabled).apply();
     }
 
+    private Task dwellTask442;
+    private long dwellStart442=0L;
+    private boolean dwellScheduled442=false;
+    private static final long DWELL_MS_442=13500L;
+
+    @Override void nextTask(){
+        // The inherited WebView auto-advances after only 5.3 s. Keep the
+        // iframe visible long enough for recognized play interactions,
+        // unless a direct video has already been captured.
+        if(scanning && runMode==2 && current!=null &&
+            current==dwellTask442 && !captured442().contains(current.url)){
+            long elapsed=android.os.SystemClock.elapsedRealtime()-dwellStart442;
+            if(elapsed < DWELL_MS_442){
+                if(!dwellScheduled442){
+                    dwellScheduled442=true;
+                    final Task task=current;
+                    final int seq=scanSerial;
+                    ui.postDelayed(()->{
+                        dwellScheduled442=false;
+                        if(scanning&&runMode==2&&current==task&&scanSerial==seq)
+                            nextTask();
+                    },Math.max(300L,DWELL_MS_442-elapsed));
+                }
+                return;
+            }
+        }
+        super.nextTask();
+        dwellTask442=current;
+        dwellStart442=android.os.SystemClock.elapsedRealtime();
+        dwellScheduled442=false;
+    }
+
     @Override void reanalyzeFrames(){
         if(scanning){toast("A análise já está em execução");return;}
         if(inbox.isEmpty())stageAllFrames(false);
@@ -216,6 +248,23 @@ assert data.count(anchor)==1,"page hook missing"
 data=data.replace(anchor,'''        super.createIframePage();
         installIntegratedCrawler442();''',1)
 premium.write_text(data,encoding="utf-8")
+
+# Allow additional safe Play attempts while retaining the six-attempt cap
+# and the existing cross-origin/ad restrictions.
+interactor=src/"VistaPlayInteractor.java"
+text=interactor.read_text(encoding="utf-8")
+assert "private static final int MAX_TAPS=3;" in text
+interactor.write_text(text.replace("private static final int MAX_TAPS=3;",
+    "private static final int MAX_TAPS=6;"),encoding="utf-8")
+
+text=premium.read_text(encoding="utf-8")
+text=text.replace("Play identificados (até 3 vezes)","Play identificados (até 6 vezes)")
+needle="            handler.postDelayed(()->performVistaIframeAssist(view,task,sequence),6500);"
+assert text.count(needle)==1
+text=text.replace(needle,needle+"""
+            handler.postDelayed(()->performVistaIframeAssist(view,task,sequence),8500);
+            handler.postDelayed(()->performVistaIframeAssist(view,task,sequence),11300);""",1)
+premium.write_text(text,encoding="utf-8")
 
 grad=gradle.read_text(encoding="utf-8")
 assert "versionName '4.4.1'" in grad and "versionCode 46" in grad
