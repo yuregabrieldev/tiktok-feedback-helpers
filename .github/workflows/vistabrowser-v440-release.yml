@@ -763,7 +763,7 @@ jobs:
           python3 harvester-browser/v4.4.0/upgrade.py
           grep -q "versionName '4.4.0'" hb-v18/app/build.gradle
           grep -q "performVistaIframeAssist" hb-v18/app/src/main/java/com/yure/videoharvester/VistaScraperPremiumActivity.java
-          grep -q 'VistaSourceCollector.scan(this,view)' hb-v18/app/src/main/java/com/yure/videoharvester/VistaScraperPremiumActivity.java
+          grep -q 'VistaSourceCollector.scan(this,view,slugTitle(parentPage),parentPage)' hb-v18/app/src/main/java/com/yure/videoharvester/VistaScraperPremiumActivity.java
       - name: Prepare signing material (only if owner provisioned all secrets)
         shell: bash
         env:
