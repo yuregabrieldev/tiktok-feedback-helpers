@@ -815,4 +815,3 @@ jobs:
             Foi acrescentado suporte de assinatura persistente quando as quatro GitHub Actions Secrets forem configuradas pelo proprietário. SEM esses segredos, continua a ser uma APK debug assinada pela build: pode não atualizar a versão instalada. Antes de qualquer reinstalação, guarda os teus dados!
           prerelease: true
           files: VistaBrowser-v4.3.8.apk
-          prerelease: false
