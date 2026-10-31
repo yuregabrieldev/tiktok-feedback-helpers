@@ -211,12 +211,10 @@ methods='''    // One durable source of truth: a media URL only counts as captur
 
 '''
 data=data.replace(anchor,methods+anchor,1)
-anchor='''        super.createIframePage();
-        hero(iframeBody,"Inspeção de players",'''
+anchor='''        super.createIframePage();'''
 assert data.count(anchor)==1,"page hook missing"
 data=data.replace(anchor,'''        super.createIframePage();
-        installIntegratedCrawler442();
-        hero(iframeBody,"Inspeção de players",''',1)
+        installIntegratedCrawler442();''',1)
 premium.write_text(data,encoding="utf-8")
 
 grad=gradle.read_text(encoding="utf-8")
