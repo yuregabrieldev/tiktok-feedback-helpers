@@ -24,8 +24,9 @@ public final class VistaPlayerAssistant {
         final String script="(function(){try{let attempted=0,frames=0;"+
             "function walk(d){if(!d||frames>24)return;"+
             "d.querySelectorAll('video').forEach(function(v){"+
-            "if(attempted>=5 || !v.paused || v.ended || !v.isConnected)return;"+
+            "if(attempted>=5 || !v.paused || v.ended || !v.isConnected || v.__vistaTried)return;"+
             "if(!v.src&&!v.currentSrc&&!v.querySelector('source'))return;"+
+            "if(!v.getClientRects().length)return;v.__vistaTried=true;"+
             "attempted++;try{let p=v.play();if(p&&p.catch)p.catch(function(){});}catch(e){}"+
             "});d.querySelectorAll('iframe').forEach(function(f){frames++;"+
             "if(frames>24)return;try{walk(f.contentDocument);}catch(e){}});}"+
