@@ -14,7 +14,7 @@ source=main.read_text(encoding="utf-8")
 # WebViews rather than the global root, so new tabs and private tabs work too.
 pattern=r"\bnew\s+WebView\s*\(\s*(?:this|MainActivity\.this)\s*\)"
 wrapped=("VistaMediaContextMenu.attach(MainActivity.this, new WebView(MainActivity.this), "
-         "url -> newTab(selected!=null && selected.privateMode,url))")
+         "mediaTarget -> newTab(selected!=null && selected.privateMode,mediaTarget))")
 updated,count=re.subn(pattern,lambda match: wrapped,source)
 assert 1<=count<=6, (
     f"Expected at least one tab WebView constructor, got {count}. "
