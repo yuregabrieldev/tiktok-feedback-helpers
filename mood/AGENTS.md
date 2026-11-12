@@ -1,0 +1,8 @@
+- Scope High Performance presentation styles under `.mood-b` and `b-` classes so refinements do not alter Proposal A.
+- Scope Editorial presentation styles under `.mood-a` and `a-` classes so Proposal A can be refined independently of Proposal B.
+- Keep the scientific library in its own browser-safe presentation component; placeholder metadata and pending sources must not imply real publications or active original-work links.
+- Use Proposal B for the definitive `/` Home and retain `/proposta-b` as the existing public comparison URL.
+- Keep editorial/publication demo records in typed browser-safe data modules and filter them with pure functions to support future integrations without inventing approved content.
+- Unnest detail routes with trailing underscores so listing pages never need to render detail children.
+- Keep application confirmation unavailable until real persistence exists; administrative previews are public, explicitly demonstrative, and have no active write actions.
+- Bundle fonts through local package imports, and keep the default Vite configuration independent of hosted editors.
